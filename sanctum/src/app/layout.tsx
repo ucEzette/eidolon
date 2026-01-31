@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Orbitron } from "next/font/google";
 import "./globals.css";
 import { Web3Provider } from "@/components/providers/Web3Provider";
 
 const inter = Inter({
   variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const orbitron = Orbitron({
+  variable: "--font-orbitron",
   subsets: ["latin"],
 });
 
@@ -30,7 +35,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased 
+        className={`${inter.variable} ${jetbrainsMono.variable} ${orbitron.variable} antialiased 
                     bg-background-dark min-h-screen text-white font-sans overflow-x-hidden`}
       >
         <Web3Provider>{children}</Web3Provider>

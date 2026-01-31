@@ -12,6 +12,7 @@ const nextConfig = {
   experimental: {
     // Ensure client components are properly handled
     serverComponentsExternalPackages: [],
+    esmExternals: "loose",
   },
   // Suppress hydration warnings from web3 libs
   reactStrictMode: true,

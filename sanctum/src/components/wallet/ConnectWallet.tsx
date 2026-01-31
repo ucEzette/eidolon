@@ -100,8 +100,9 @@ export function ConnectWallet() {
         )}
 
         {/* Address */}
-        <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600/20 to-purple-600/20 
-                        border border-violet-500/30 text-violet-200 font-mono text-sm">
+        <div className="px-4 py-2 rounded-none bg-white/5 
+                        border border-white/10 text-phantom-cyan font-mono text-sm tracking-tight
+                        shadow-[2px_2px_0px_rgba(255,255,255,0.05)]">
           {address.slice(0, 6)}...{address.slice(-4)}
         </div>
 
@@ -184,12 +185,14 @@ export function ConnectWallet() {
       <button
         onClick={() => setShowMethods(!showMethods)}
         disabled={isLoading}
-        className="px-6 py-3 rounded-xl overflow-hidden
-                   bg-gradient-to-r from-violet-600 to-purple-600 
-                   hover:from-violet-500 hover:to-purple-500
-                   disabled:from-gray-600 disabled:to-gray-700
-                   text-white font-semibold shadow-lg shadow-violet-500/25
-                   hover:shadow-violet-500/40 transition-all duration-300"
+        className="px-6 py-3 rounded-none border border-phantom-cyan/50
+                   bg-phantom-cyan hover:bg-phantom-cyan/90
+                   disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500
+                   text-black font-bold tracking-wide uppercase
+                   shadow-[4px_4px_0px_rgba(255,255,255,0.1)]
+                   hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_rgba(255,255,255,0.1)]
+                   active:translate-x-[4px] active:translate-y-[4px] active:shadow-none
+                   transition-all duration-100"
       >
         <span className="flex items-center gap-2">
           {isLoading ? (

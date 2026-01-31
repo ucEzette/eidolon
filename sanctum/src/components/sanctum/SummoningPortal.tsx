@@ -54,18 +54,18 @@ export function SummoningPortal() {
     };
 
     return (
-        <div className="w-full max-w-[560px] glass-card rounded-2xl p-1 shadow-2xl shadow-primary/10 relative overflow-hidden animate-fade-in-up bg-[#161023]/60 backdrop-blur-xl border border-[#895af6]/15">
+        <div className="w-full max-w-[560px] bg-void border border-border-dark/50 p-1 relative overflow-hidden animate-fade-in-up">
             {/* Top decorative glow line */}
-            <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
+            <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-phantom-cyan/50 to-transparent"></div>
 
-            <div className="bg-background-dark/40 rounded-xl p-8 backdrop-blur-sm relative">
+            <div className="bg-black/40 p-8 relative backdrop-blur-md">
                 {/* Header */}
                 <div className="mb-8 text-center">
-                    <div className="inline-flex items-center justify-center p-3 mb-4 rounded-full bg-primary/10 border border-primary/20 shadow-[0_0_15px_-3px_rgba(137,90,246,0.3)]">
-                        <span className="material-symbols-outlined text-primary text-2xl">pentagon</span>
+                    <div className="inline-flex items-center justify-center p-3 mb-4 border border-phantom-cyan/20 bg-phantom-cyan/5 shadow-[0_0_15px_-3px_rgba(165,243,252,0.2)]">
+                        <span className="material-symbols-outlined text-phantom-cyan text-2xl">pentagon</span>
                     </div>
-                    <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-br from-white via-white to-white/70 tracking-tight mb-2">Summon Ghost Permit</h1>
-                    <p className="text-text-muted text-sm">Authorize zero-TVL liquidity without locking assets.</p>
+                    <h1 className="text-3xl font-display font-bold text-white tracking-widest uppercase mb-2 drop-shadow-md">Summon Ghost Permit</h1>
+                    <p className="text-text-muted text-sm font-mono">Authorize zero-TVL liquidity without locking assets.</p>
                 </div>
 
                 {/* Error Banner */}
@@ -115,20 +115,20 @@ export function SummoningPortal() {
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             onClick={() => setLiquidityMode('one-sided')}
-                            className={`py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2
+                            className={`py-3 px-4 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2 border
                                 ${liquidityMode === 'one-sided'
-                                    ? 'bg-primary text-white shadow-[0_0_15px_-5px_#895af6]'
-                                    : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'}`}
+                                    ? 'bg-phantom-cyan text-black border-phantom-cyan shadow-[0_0_10px_rgba(165,243,252,0.3)]'
+                                    : 'bg-transparent text-slate-500 border-white/10 hover:border-white/20 hover:text-white'}`}
                         >
                             <span className="material-symbols-outlined text-[18px]">radio_button_checked</span>
                             One-Sided ({fees.singleSided}%)
                         </button>
                         <button
                             onClick={() => setLiquidityMode('dual-sided')}
-                            className={`py-3 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2
+                            className={`py-3 px-4 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2 border
                                 ${liquidityMode === 'dual-sided'
-                                    ? 'bg-gradient-to-r from-primary to-purple-500 text-white shadow-[0_0_15px_-5px_#895af6]'
-                                    : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'}`}
+                                    ? 'bg-phantom-cyan text-black border-phantom-cyan shadow-[0_0_10px_rgba(165,243,252,0.3)]'
+                                    : 'bg-transparent text-slate-500 border-white/10 hover:border-white/20 hover:text-white'}`}
                         >
                             <span className="material-symbols-outlined text-[18px]">radio_button_checked</span>
                             Dual-Sided ({fees.dualSided}%)
@@ -146,10 +146,10 @@ export function SummoningPortal() {
                             </label>
                             <span className="text-xs font-mono text-text-muted">Balance: 142.5 ETH</span>
                         </div>
-                        <div className="relative flex items-center bg-surface-dark border border-border-dark hover:border-primary/40 focus-within:border-primary/80 focus-within:shadow-[0_0_15px_-5px_#895af6] rounded-xl transition-all duration-300">
+                        <div className="relative flex items-center bg-black border border-white/10 hover:border-white/20 focus-within:border-phantom-cyan focus-within:shadow-[0_0_10px_-2px_rgba(165,243,252,0.3)] transition-all duration-300">
                             {/* Input */}
                             <input
-                                className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-3xl font-medium placeholder-white/20 p-5 pr-32 caret-primary"
+                                className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-3xl font-medium placeholder-white/20 p-5 pr-32 caret-phantom-cyan"
                                 placeholder="0.00"
                                 type="text"
                                 value={amount}
@@ -159,12 +159,12 @@ export function SummoningPortal() {
                             <div className="absolute right-3 top-1/2 -translate-y-1/2">
                                 <button
                                     onClick={() => setIsTokenSelectorOpen(true)}
-                                    className="flex items-center gap-2 bg-[#2e2249] hover:bg-[#3a2c5b] text-white pl-2 pr-3 py-1.5 rounded-lg border border-white/5 transition-colors shadow-lg"
+                                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white pl-2 pr-3 py-1.5 border border-white/10 transition-colors"
                                 >
-                                    <div className="size-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
+                                    <div className="size-6 rounded-none bg-white/10 flex items-center justify-center overflow-hidden">
                                         <img alt="Ethereum logo" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwND7wf2eTPp9JWfuDxhsMogxcpN-WI4C7CVmUkEIzesRJiwQLsOkTk6iDEK07NKRtEW9Qhx7EtR59x0BcyFsxwoXja9s0anHvC5EBn9s0yIaILG-5_EY-q5BOisYirItOYAmAR4J73ZmvpGxJRLnc9GWmarPt7Td0qPeIkaWGaRHEiZqwTlVjxOYjZzDO_PMBR12zUUkvyBLc4FpoIzMjBWTHpXcWrKWWMxymMQNgIOSEMSyf6fc36rp9ImnGcgetDkicnpKLeu0" />
                                     </div>
-                                    <span className="font-bold text-sm">ETH</span>
+                                    <span className="font-bold text-sm font-mono">ETH</span>
                                     <span className="material-symbols-outlined text-lg text-white/50">expand_more</span>
                                 </button>
                             </div>
@@ -274,20 +274,21 @@ export function SummoningPortal() {
                     <button
                         onClick={handleSign}
                         disabled={isPending}
-                        className={`relative w-full group overflow-hidden rounded-xl transition-all duration-300 h-14 shadow-neon shadow-primary/20
-                            ${!isConnected ? 'bg-white/10 hover:bg-white/20' : 'bg-primary hover:bg-[#7c4df0]'}`}
+                        className={`relative w-full group overflow-hidden transition-all duration-100 h-14
+                            ${!isConnected
+                                ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50'
+                                : 'bg-phantom-cyan hover:bg-phantom-cyan/90 text-black shadow-[4px_4px_0px_#fff4] hover:shadow-[2px_2px_0px_#fff4] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'}`}
                     >
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out"></div>
                         <div className="flex items-center justify-center gap-2">
                             {isPending ? (
-                                <span className="material-symbols-outlined text-white animate-spin">refresh</span>
+                                <span className="material-symbols-outlined animate-spin">refresh</span>
                             ) : (
-                                <span className="material-symbols-outlined text-white animate-pulse">
+                                <span className="material-symbols-outlined">
                                     {!isConnected ? 'wallet' : 'fingerprint'}
                                 </span>
                             )}
-                            <span className="text-white text-base font-bold tracking-wide">
-                                {isPending ? 'SIGNING...' : (!isConnected ? 'CONNECT WALLET' : 'SIGN GHOST PERMIT')}
+                            <span className="text-base font-bold tracking-widest uppercase">
+                                {isPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
                             </span>
                         </div>
                     </button>

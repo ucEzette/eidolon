@@ -10,38 +10,37 @@ const config: Config = {
     theme: {
         extend: {
             colors: {
-                violet: {
-                    950: "#1a0a2e",
-                },
                 // Base Theme
-                primary: "#895af6",
-                "primary-glow": "#895af680",
-                secondary: "#06b6d4",
+                primary: "#A5F3FC", // Phantom Cyan
+                "primary-glow": "rgba(165, 243, 252, 0.5)",
+                secondary: "#0891B2", // Signal Cyan
 
                 // Backgrounds
-                "background-light": "#f6f5f8",
-                "background-dark": "#0b0814",
-                void: "#0a0a0f",
+                "background-light": "#0a0a0f", // Unused
+                "background-dark": "#030303", // Void
+                void: "#030303",
+                obsidian: "#000000",
 
                 // Surfaces
-                "card-dark": "#161023",
-                "surface-dark": "#211834",
-                panel: "#13131a",
+                "card-dark": "rgba(0, 0, 0, 0.6)",
+                "surface-dark": "#000000",
+                panel: "#000000",
 
                 // Borders & Text
-                "border-dark": "#2e2249",
-                "text-muted": "#a290cb",
+                "border-dark": "rgba(255, 255, 255, 0.08)",
+                "text-muted": "#94A3B8", // Slate-400
                 "glass-border": "rgba(255, 255, 255, 0.08)",
-                "glass-surface": "rgba(22, 16, 35, 0.6)",
+                "glass-surface": "rgba(20, 25, 30, 0.4)",
 
                 // Stitch Component Specifics
-                "eidolon-cyan": "#00f0ff",
-                "eidolon-violet": "#6325f4",
-                "neon-green": "#00ff9d",
-                "neon-red": "#ff0055",
-                danger: "#ef4444",
+                "eidolon-cyan": "#A5F3FC",
+                "eidolon-violet": "#6325f4", // Keep for legacy
+                "phantom-cyan": "#A5F3FC",
+                "signal-cyan": "#0891B2",
+                "signal-crimson": "#DC2626",
+                danger: "#DC2626",
                 "danger-dark": "#7f1d1d",
-                accent: "#00f0ff",
+                accent: "#A5F3FC",
             },
             backgroundImage: {
                 'aurora': 'radial-gradient(circle at 50% -20%, #4c1d95 0%, #161023 45%, #0b0814 100%)',
@@ -67,8 +66,9 @@ const config: Config = {
                 }
             },
             fontFamily: {
-                display: ["Inter", "sans-serif"],
-                mono: ["JetBrains Mono", "monospace"],
+                display: ["var(--font-orbitron)", "sans-serif"],
+                mono: ["var(--font-jetbrains-mono)", "monospace"],
+                sans: ["var(--font-inter)", "sans-serif"],
             },
         },
     },

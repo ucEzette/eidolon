@@ -17,28 +17,28 @@ export function MirrorDashboard() {
             {/* Top Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Card 1: Virtual TVL */}
-                <div className="glass-panel relative overflow-hidden rounded-xl p-6 group bg-[#13131a]/60 backdrop-blur-xl border border-[#895af6]/15 hover:border-[#895af6]/30 transition-all">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-3xl transition-all group-hover:bg-primary/20"></div>
+                <div className="relative overflow-hidden p-6 group bg-black border border-white/10 hover:border-phantom-cyan/50 transition-all">
+                    <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/5 blur-3xl transition-all group-hover:bg-phantom-cyan/10"></div>
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Virtual TVL</p>
+                            <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Virtual TVL</p>
                             {/* Info Tooltip */}
                             <div className="relative group/info">
-                                <button className="p-0.5 rounded-full hover:bg-white/10 transition-colors">
-                                    <span className="material-symbols-outlined text-[14px] text-slate-500 group-hover/info:text-primary">info</span>
+                                <button className="p-0.5 hover:bg-white/10 transition-colors">
+                                    <span className="material-symbols-outlined text-[14px] text-slate-600 group-hover/info:text-phantom-cyan">info</span>
                                 </button>
-                                <div className="absolute left-0 top-6 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-primary text-xs mb-1">Virtual TVL</p>
-                                    <p className="text-white/60 text-xs">The total value of all Ghost Permits combined. Unlike traditional TVL, this represents &quot;phantom&quot; liquidity that materializes on-demand.</p>
+                                <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
+                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">Virtual TVL</p>
+                                    <p className="text-white/60 text-xs font-mono">Total value of all Ghost Permits. "Phantom" liquidity.</p>
                                 </div>
                             </div>
                         </div>
-                        <span className="material-symbols-outlined text-slate-500">query_stats</span>
+                        <span className="material-symbols-outlined text-slate-600 group-hover:text-phantom-cyan transition-colors">query_stats</span>
                     </div>
                     <div className="flex items-baseline gap-3">
-                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">$4,203,192<span className="text-slate-500 text-xl">.00</span></h3>
+                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">$4,203,192<span className="text-slate-600 text-xl">.00</span></h3>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-400">
+                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-500 font-mono">
                         <span className="material-symbols-outlined text-sm">trending_up</span>
                         <span>+1.2% (24h)</span>
                     </div>
