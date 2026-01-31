@@ -26,10 +26,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+      </head>
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased 
-                    bg-gradient-to-br from-gray-950 via-violet-950/20 to-gray-950 
-                    min-h-screen text-white font-sans`}
+                    bg-background-dark min-h-screen text-white font-sans overflow-x-hidden`}
       >
         <Web3Provider>{children}</Web3Provider>
       </body>
