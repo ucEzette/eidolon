@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectWallet } from "@/components/wallet/ConnectWallet";
-import { useAccount, useNetwork } from "wagmi";
+import { useAccount } from "wagmi";
 
 export function Navbar() {
     const pathname = usePathname();
-    const { isConnected } = useAccount();
-    const { chain } = useNetwork();
+    const { isConnected, chain } = useAccount();
 
     const isActive = (path: string) => pathname === path;
 

@@ -1,28 +1,16 @@
 "use client";
 
-import { useAccount } from "wagmi";
+import { useState } from "react";
 
 export function MirrorDashboard() {
-    const { isConnected } = useAccount();
-
-    if (!isConnected) {
-        return (
-            <div className="flex flex-col items-center justify-center py-20">
-                <div className="glass-panel p-8 rounded-xl text-center max-w-md">
-                    <span className="material-symbols-outlined text-4xl text-slate-500 mb-4">lock</span>
-                    <h2 className="text-xl font-bold text-white mb-2">Access Denied</h2>
-                    <p className="text-slate-400">Connect your wallet to view your Mirror Dashboard.</p>
-                </div>
-            </div>
-        );
-    }
+    const [showRevokeModal, setShowRevokeModal] = useState(false);
 
     return (
-        <div className="mx-auto flex max-w-7xl flex-col gap-8">
-            {/* Stats Row */}
+        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 lg:px-8">
+            {/* Top Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Card 1: Virtual TVL */}
-                <div className="glass-card relative overflow-hidden rounded-xl p-6 group">
+                <div className="glass-panel relative overflow-hidden rounded-xl p-6 group bg-[#13131a]/60 backdrop-blur-xl border border-[#895af6]/15 hover:border-[#895af6]/30 transition-all">
                     <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-3xl transition-all group-hover:bg-primary/20"></div>
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Virtual TVL</p>
@@ -38,7 +26,7 @@ export function MirrorDashboard() {
                 </div>
 
                 {/* Card 2: Ghost Permits */}
-                <div className="glass-card relative overflow-hidden rounded-xl p-6 group">
+                <div className="glass-panel relative overflow-hidden rounded-xl p-6 group bg-[#13131a]/60 backdrop-blur-xl border border-[#06b6d4]/15 hover:border-[#06b6d4]/30 transition-all">
                     <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-secondary/10 blur-3xl transition-all group-hover:bg-secondary/20"></div>
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Ghost Permits</p>
@@ -53,8 +41,8 @@ export function MirrorDashboard() {
                     </div>
                 </div>
 
-                {/* Card 3: Pending Rewards */}
-                <div className="glass-card relative overflow-hidden rounded-xl p-6 group border-primary/30">
+                {/* Card 3: Your Rewards */}
+                <div className="glass-panel relative overflow-hidden rounded-xl p-6 group border border-primary/30 bg-[#13131a]/60 backdrop-blur-xl transition-all hover:bg-[#13131a]/80">
                     <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/20 blur-3xl transition-all group-hover:bg-primary/30"></div>
                     <div className="flex items-center justify-between mb-4">
                         <p className="text-primary text-sm font-bold uppercase tracking-wider drop-shadow-[0_0_8px_rgba(137,90,246,0.5)]">Your Rewards</p>
@@ -62,7 +50,7 @@ export function MirrorDashboard() {
                     </div>
                     <div className="flex items-baseline justify-between w-full">
                         <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">450.22 <span className="text-sm font-sans text-slate-400">EID</span></h3>
-                        <button className="bg-primary/10 hover:bg-primary/20 border border-primary/30 text-xs font-bold text-white px-3 py-1.5 rounded-lg uppercase tracking-wide transition-all">
+                        <button className="glass-button bg-[#895af6]/10 border border-[#895af6]/30 hover:bg-[#895af6]/20 hover:border-[#895af6]/60 text-xs font-bold text-white px-3 py-1.5 rounded-lg uppercase tracking-wide transition-all shadow-none hover:shadow-[0_0_15px_rgba(137,90,246,0.3)]">
                             Claim
                         </button>
                     </div>
@@ -72,7 +60,7 @@ export function MirrorDashboard() {
                 </div>
             </div>
 
-            {/* Active Positions Section */}
+            {/* Active Positions Table */}
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between px-1">
                     <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
@@ -89,8 +77,7 @@ export function MirrorDashboard() {
                     </div>
                 </div>
 
-                {/* Table Container */}
-                <div className="glass-card rounded-xl overflow-hidden">
+                <div className="glass-panel rounded-xl overflow-hidden bg-[#13131a]/60 backdrop-blur-xl border border-white/5">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -138,6 +125,48 @@ export function MirrorDashboard() {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
+                                        <button
+                                            onClick={() => setShowRevokeModal(true)}
+                                            className="text-slate-400 hover:text-white transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined">more_vert</span>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {/* Row 2 */}
+                                <tr className="group hover:bg-white/[0.02] transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex -space-x-2">
+                                                <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-orange-500 to-yellow-500">WBTC</div>
+                                                <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-yellow-400 to-orange-300">DAI</div>
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-white">WBTC-DAI</div>
+                                                <div className="text-xs text-slate-500">Curve</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 font-mono text-slate-300">
+                                        0.50 <span className="text-xs text-slate-500">WBTC</span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2 font-mono text-amber-400">
+                                            <span className="material-symbols-outlined text-base">timer</span>
+                                            02h 11m 45s
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 font-mono text-primary font-bold">8.1%</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                            </span>
+                                            Expiring Soon
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
                                         <button className="text-slate-400 hover:text-white transition-colors">
                                             <span className="material-symbols-outlined">more_vert</span>
                                         </button>
@@ -146,21 +175,78 @@ export function MirrorDashboard() {
                             </tbody>
                         </table>
                     </div>
-
-                    {/* Pagination/Footer of table */}
                     <div className="border-t border-white/5 bg-white/[0.02] px-6 py-3 flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Showing 1 of 1 positions</span>
+                        <span className="text-xs text-slate-500">Showing 1-3 of 12 positions</span>
                         <div className="flex gap-1">
                             <button disabled className="p-1 rounded hover:bg-white/10 text-slate-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 <span className="material-symbols-outlined text-sm">chevron_left</span>
                             </button>
-                            <button disabled className="p-1 rounded hover:bg-white/10 text-slate-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button className="p-1 rounded hover:bg-white/10 text-slate-400 transition-colors">
                                 <span className="material-symbols-outlined text-sm">chevron_right</span>
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Revoke Modal */}
+            {showRevokeModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0a0a0f]/80 backdrop-blur-sm">
+                    <div className="glass-modal relative w-full max-w-md transform overflow-hidden rounded-2xl border border-red-500/30 p-1 shadow-2xl transition-all bg-[rgba(10,10,15,0.85)] backdrop-blur-2xl">
+                        <div className="relative flex flex-col items-center p-6 sm:p-8">
+                            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
+                                <span className="material-symbols-outlined text-4xl text-red-500 animate-pulse">warning</span>
+                            </div>
+                            <h3 className="mb-2 text-2xl font-bold tracking-tight text-center">
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ef4444] to-[#a855f7]">Revoke Permit?</span>
+                            </h3>
+                            <p className="mb-8 text-center text-sm text-slate-400">
+                                This action is irreversible. You are about to revoke a Ghost Permit, which will immediately cease liquidity provision.
+                            </p>
+
+                            <div className="mb-8 w-full rounded-xl border border-white/5 bg-white/[0.03] p-4 shadow-inner">
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                                        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Token Pair</span>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex -space-x-1.5">
+                                                <div className="h-5 w-5 rounded-full bg-slate-700 ring-1 ring-[#13131a] flex items-center justify-center text-[6px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">E</div>
+                                                <div className="h-5 w-5 rounded-full bg-slate-700 ring-1 ring-[#13131a] flex items-center justify-center text-[6px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">U</div>
+                                            </div>
+                                            <span className="font-mono text-sm font-bold text-white">ETH-USDC</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                                        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Amount</span>
+                                        <span className="font-mono text-sm font-bold text-white">5.20 ETH</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Time Remaining</span>
+                                        <span className="font-mono text-sm font-bold text-emerald-400">14h 22m 10s</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid w-full grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => setShowRevokeModal(false)}
+                                    className="flex items-center justify-center rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => setShowRevokeModal(false)}
+                                    className="group relative flex items-center justify-center overflow-hidden rounded-lg bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-neon-danger transition-all hover:bg-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.6)]"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1s_infinite]"></div>
+                                    <span className="material-symbols-outlined mr-2 text-lg">delete_forever</span>
+                                    Confirm Revoke
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

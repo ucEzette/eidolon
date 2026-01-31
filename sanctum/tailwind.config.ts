@@ -13,17 +13,35 @@ const config: Config = {
                 violet: {
                     950: "#1a0a2e",
                 },
+                // Base Theme
                 primary: "#895af6",
                 "primary-glow": "#895af680",
                 secondary: "#06b6d4",
+
+                // Backgrounds
                 "background-light": "#f6f5f8",
                 "background-dark": "#0b0814",
+                void: "#0a0a0f",
+
+                // Surfaces
                 "card-dark": "#161023",
                 "surface-dark": "#211834",
+                panel: "#13131a",
+
+                // Borders & Text
                 "border-dark": "#2e2249",
                 "text-muted": "#a290cb",
-                void: "#0a0a0f",
-                panel: "#13131a",
+                "glass-border": "rgba(255, 255, 255, 0.08)",
+                "glass-surface": "rgba(22, 16, 35, 0.6)",
+
+                // Stitch Component Specifics
+                "eidolon-cyan": "#00f0ff",
+                "eidolon-violet": "#6325f4",
+                "neon-green": "#00ff9d",
+                "neon-red": "#ff0055",
+                danger: "#ef4444",
+                "danger-dark": "#7f1d1d",
+                accent: "#00f0ff",
             },
             backgroundImage: {
                 'aurora': 'radial-gradient(circle at 50% -20%, #4c1d95 0%, #161023 45%, #0b0814 100%)',
