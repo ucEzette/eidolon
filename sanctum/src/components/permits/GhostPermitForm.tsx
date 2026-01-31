@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount, useSignTypedData, useNetwork } from "wagmi";
+import { useAccount, useSignTypedData } from "wagmi";
 import { parseUnits, type Address } from "viem";
 import { baseSepolia } from "wagmi/chains";
 import { CONTRACTS, PERMIT2_DOMAIN } from "@/config/web3";
@@ -48,9 +48,8 @@ export interface SignedGhostPermit {
 }
 
 export function GhostPermitForm({ onPermitSigned }: GhostPermitFormProps) {
-    const { address, isConnected } = useAccount();
-    const { chain } = useNetwork();
-    const { signTypedDataAsync, isLoading: isPending } = useSignTypedData();
+    const { address, isConnected, chain } = useAccount();
+    const { signTypedDataAsync, isPending } = useSignTypedData();
 
     // Form state
     const [token, setToken] = useState<string>("");

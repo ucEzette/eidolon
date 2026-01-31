@@ -3,6 +3,9 @@
 import { Navbar } from "@/components/sanctum/Navbar";
 import { MirrorDashboard } from "@/components/sanctum/MirrorDashboard";
 
+// Force client-side rendering to avoid SSR issues with wagmi/viem
+export const dynamic = "force-dynamic";
+
 export default function MirrorPage() {
     return (
         <main className="min-h-screen bg-background-dark font-display relative overflow-hidden">

@@ -3,6 +3,9 @@
 import { Navbar } from "@/components/sanctum/Navbar";
 import { SummoningPortal } from "@/components/sanctum/SummoningPortal";
 
+// Force client-side rendering to avoid SSR issues with wagmi/viem
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-background-dark font-display relative overflow-hidden">
