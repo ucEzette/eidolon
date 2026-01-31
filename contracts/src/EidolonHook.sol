@@ -177,13 +177,17 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @notice Deploys the EIDOLON Hook
     /// @param _poolManager The Uniswap v4 PoolManager address
     /// @param _permit2 The canonical Permit2 contract address
+    /// @param _owner The initial owner address (for admin functions)
+    /// @param _treasury The initial treasury address (for fee withdrawal)
     constructor(
         IPoolManager _poolManager,
-        address _permit2
+        address _permit2,
+        address _owner,
+        address _treasury
     ) BaseHook(_poolManager) {
         PERMIT2 = ISignatureTransfer(_permit2);
-        owner = msg.sender;
-        treasury = msg.sender;
+        owner = _owner;
+        treasury = _treasury;
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

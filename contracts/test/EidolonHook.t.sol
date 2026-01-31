@@ -18,8 +18,8 @@ import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
 /// @notice A mock version of EidolonHook that bypasses address validation for testing
 /// @dev Defined before test contract so it can be used in setUp
 contract EidolonHookMock is EidolonHook {
-    constructor(IPoolManager _poolManager, address _permit2) 
-        EidolonHook(_poolManager, _permit2) {}
+    constructor(IPoolManager _poolManager, address _permit2, address _owner, address _treasury) 
+        EidolonHook(_poolManager, _permit2, _owner, _treasury) {}
     
     /// @notice Override to skip address validation
     function validateHookAddress(BaseHook) internal pure override {}
@@ -56,7 +56,8 @@ contract EidolonHookTest is Test {
         
         // Deploy hook using mock that bypasses address validation
         // This allows us to test hook logic without needing a valid hook address
-        hook = EidolonHook(payable(address(new EidolonHookMock(manager, MOCK_PERMIT2))));
+        // address(this) is the owner/treasury for testing
+        hook = EidolonHook(payable(address(new EidolonHookMock(manager, MOCK_PERMIT2, address(this), address(this)))));
         
         // Fund test accounts
         vm.deal(provider, 100 ether);

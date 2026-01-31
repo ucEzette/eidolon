@@ -8,14 +8,19 @@ import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {EidolonHook} from "../src/EidolonHook.sol";
 
 contract DeployEidolon is Script {
+    // Unichain Sepolia addresses
     address constant POOL_MANAGER = 0x00B036B58a818B1BC34d502D3fE730Db729e62AC;
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
+    
+    // Foundry's CREATE2_DEPLOYER used by forge script --broadcast
+    address constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
 
         console2.log("Deploying from:", deployer);
+        console2.log("Using CREATE2_DEPLOYER:", CREATE2_DEPLOYER);
 
         // Calculate required flags
         uint160 flags = uint160(
@@ -26,33 +31,47 @@ contract DeployEidolon is Script {
 
         console2.log("Mining salt for flags:", flags);
 
-        // Deploy implementation (optional if using proxy, but we deploy directly for MVP)
-        // Construction args: manager, permit2
+        // Construction args: manager, permit2, owner, treasury
         bytes memory creationCode = type(EidolonHook).creationCode;
-        bytes memory constructorArgs = abi.encode(IPoolManager(POOL_MANAGER), PERMIT2);
+        bytes memory constructorArgs = abi.encode(
+            IPoolManager(POOL_MANAGER), 
+            PERMIT2,
+            deployer,  // owner = deployer
+            deployer   // treasury = deployer
+        );
 
-        // Mine salt
+        // Mine salt - use CREATE2_DEPLOYER as the deployer address (not EOA)
         (address hookAddress, bytes32 salt) = HookMiner.find(
-            deployer,
+            CREATE2_DEPLOYER,
             flags,
             creationCode,
             constructorArgs
         );
 
         console2.log("Mined salt:", vm.toString(salt));
-        console2.log("Expected address:", hookAddress);
+        console2.log("Expected hook address:", hookAddress);
 
         vm.startBroadcast(deployerPrivateKey);
 
         EidolonHook hook = new EidolonHook{salt: salt}(
             IPoolManager(POOL_MANAGER),
-            PERMIT2
+            PERMIT2,
+            deployer,  // owner
+            deployer   // treasury
         );
 
-        require(address(hook) == hookAddress, "Hook address mismatch");
+        console2.log("EidolonHook deployed at:", address(hook));
+        
+        // Validate the hook address has correct flags
+        require(address(hook) == hookAddress, "Hook address mismatch - salt mining failed");
 
         vm.stopBroadcast();
 
-        console2.log("EidolonHook deployed at:", address(hook));
+        console2.log("=== DEPLOYMENT SUCCESSFUL ===");
+        console2.log("Hook Address:", address(hook));
+        console2.log("Owner:", hook.owner());
+        console2.log("Treasury:", hook.treasury());
     }
 }
+
+

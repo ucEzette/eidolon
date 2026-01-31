@@ -40,3 +40,11 @@ seed = "0x1"
 runs = 256
 depth = 15
 fail_on_revert = false
+
+# RPC endpoints
+[rpc_endpoints]
+unichain_sepolia = "${UNICHAIN_SEPOLIA_RPC_URL}"
+
+# Etherscan verification
+[etherscan]
+unichain_sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://sepolia.uniscan.xyz/api" }
