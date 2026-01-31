@@ -71,6 +71,14 @@ export const GhostPermitDetail = () => {
                         <div className="mt-8 relative z-10">
                             <div className="flex justify-between items-end mb-2">
                                 <span className="text-secondary text-sm font-medium">Permit Energy</span>
+                                {/* Info Tooltip */}
+                                <div className="relative group/info">
+                                    <span className="material-symbols-outlined text-[14px] text-secondary/50 group-hover/info:text-primary cursor-help">info</span>
+                                    <div className="absolute left-0 top-6 z-50 w-56 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
+                                        <p className="font-bold text-primary text-xs mb-1">Permit Energy</p>
+                                        <p className="text-white/60 text-xs">Remaining validity percentage. When it reaches 0%, the permit expires and needs to be renewed to continue earning.</p>
+                                    </div>
+                                </div>
                                 <span className="text-primary font-mono text-sm font-bold">65%</span>
                             </div>
                             <div className="h-3 w-full bg-[#101f22] rounded-full overflow-hidden border border-[#315f68]/40">
@@ -97,7 +105,16 @@ export const GhostPermitDetail = () => {
                             {/* Metric 1: Yield */}
                             <div className="bg-[#101f22]/40 rounded-xl p-5 border border-[#315f68]/40 flex flex-col justify-between group hover:border-primary/40 transition-colors">
                                 <div>
-                                    <p className="text-secondary text-xs uppercase tracking-wider font-semibold mb-2">Projected Yield</p>
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                        <p className="text-secondary text-xs uppercase tracking-wider font-semibold">Projected Yield</p>
+                                        <div className="relative group/info">
+                                            <span className="material-symbols-outlined text-[12px] text-secondary/50 group-hover/info:text-primary cursor-help">info</span>
+                                            <div className="absolute left-0 top-5 z-50 w-52 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
+                                                <p className="font-bold text-primary text-xs mb-1">Projected Yield</p>
+                                                <p className="text-white/60 text-xs">Expected annual return based on current trade volume and fee rates. Updates in real-time.</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-3xl font-mono font-bold text-white group-hover:text-primary transition-colors">+14.2%</span>
                                         <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded">APY</span>
@@ -121,7 +138,16 @@ export const GhostPermitDetail = () => {
                             {/* Metric 2: Weight */}
                             <div className="bg-[#101f22]/40 rounded-xl p-5 border border-[#315f68]/40 flex flex-col justify-between group hover:border-primary/40 transition-colors">
                                 <div>
-                                    <p className="text-secondary text-xs uppercase tracking-wider font-semibold mb-2">Liq. Weight</p>
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                        <p className="text-secondary text-xs uppercase tracking-wider font-semibold">Liq. Weight</p>
+                                        <div className="relative group/info">
+                                            <span className="material-symbols-outlined text-[12px] text-secondary/50 group-hover/info:text-primary cursor-help">info</span>
+                                            <div className="absolute left-0 top-5 z-50 w-52 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
+                                                <p className="font-bold text-primary text-xs mb-1">Liquidity Weight</p>
+                                                <p className="text-white/60 text-xs">Your share of the total liquidity pool, measured in virtual ETH (vETH). Higher weight = priority for trades.</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-3xl font-mono font-bold text-white group-hover:text-primary transition-colors">2,400</span>
                                         <span className="text-xs font-mono text-white/50">vETH</span>
@@ -138,7 +164,16 @@ export const GhostPermitDetail = () => {
                             {/* Metric 3: Health */}
                             <div className="bg-[#101f22]/40 rounded-xl p-5 border border-[#315f68]/40 flex flex-col justify-between group hover:border-primary/40 transition-colors">
                                 <div>
-                                    <p className="text-secondary text-xs uppercase tracking-wider font-semibold mb-2">Collateral Health</p>
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                        <p className="text-secondary text-xs uppercase tracking-wider font-semibold">Collateral Health</p>
+                                        <div className="relative group/info">
+                                            <span className="material-symbols-outlined text-[12px] text-secondary/50 group-hover/info:text-primary cursor-help">info</span>
+                                            <div className="absolute left-0 top-5 z-50 w-56 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
+                                                <p className="font-bold text-primary text-xs mb-1">Collateral Health</p>
+                                                <p className="text-white/60 text-xs">Safety score of your position. 100% = fully healthy. Below 80% indicates high utilization that may affect performance.</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="flex items-baseline gap-2">
                                         <span className="text-3xl font-mono font-bold text-white group-hover:text-primary transition-colors">98.5</span>
                                         <span className="text-xs font-mono text-emerald-400">%</span>

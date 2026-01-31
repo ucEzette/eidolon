@@ -10,10 +10,11 @@ import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 /// @dev Focuses on ensuring the balance invariant holds under all conditions
 contract EidolonHookFuzzTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
-    // CONSTANTS
+    // CONSTANTS (Using single-sided fee for fuzz tests - worst case)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    uint16 public constant PROTOCOL_FEE_BPS = 1500;
+    uint16 public constant SINGLE_SIDED_FEE_BPS = 2000;  // 20% for Lazy Investor
+    uint16 public constant DUAL_SIDED_FEE_BPS = 1000;    // 10% for Pro LP
     uint16 public constant BPS_DENOMINATOR = 10000;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -26,7 +27,7 @@ contract EidolonHookFuzzTest is Test {
         // Bound profit to realistic values (up to 1 billion tokens with 18 decimals)
         profit = bound(profit, 0, 1_000_000_000 * 1e18);
         
-        uint256 protocolFee = (profit * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 protocolFee = (profit * SINGLE_SIDED_FEE_BPS) / BPS_DENOMINATOR;
         
         // Protocol fee should never exceed profit
         assertTrue(protocolFee <= profit, "Protocol fee exceeds profit");
@@ -41,7 +42,7 @@ contract EidolonHookFuzzTest is Test {
     function testFuzz_feeDistributionInvariant(uint256 profit) public pure {
         profit = bound(profit, 0, 1_000_000_000 * 1e18);
         
-        uint256 protocolFee = (profit * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 protocolFee = (profit * SINGLE_SIDED_FEE_BPS) / BPS_DENOMINATOR;
         uint256 providerProfit = profit - protocolFee;
         
         // Due to potential rounding, provider profit + protocol fee should equal original profit
@@ -96,14 +97,14 @@ contract EidolonHookFuzzTest is Test {
     /// @notice Fuzz test: Protocol fee BPS is within valid range
     function testFuzz_protocolFeeIsValid() public pure {
         // 15% = 1500 BPS, which is less than 100% = 10000 BPS
-        assertTrue(PROTOCOL_FEE_BPS < BPS_DENOMINATOR, "Protocol fee >= 100%");
-        assertTrue(PROTOCOL_FEE_BPS > 0, "Protocol fee is zero");
+        assertTrue(SINGLE_SIDED_FEE_BPS < BPS_DENOMINATOR, "Protocol fee >= 100%");
+        assertTrue(SINGLE_SIDED_FEE_BPS > 0, "Protocol fee is zero");
     }
 
     /// @notice Fuzz test: Zero profit results in zero fees
     function testFuzz_zeroProfitZeroFees() public pure {
         uint256 profit = 0;
-        uint256 protocolFee = (profit * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 protocolFee = (profit * SINGLE_SIDED_FEE_BPS) / BPS_DENOMINATOR;
         
         assertEq(protocolFee, 0, "Zero profit should yield zero fees");
     }
@@ -126,7 +127,7 @@ contract EidolonHookFuzzTest is Test {
     /// @notice Test maximum values don't cause overflow
     function test_maxValuesNoOverflow() public pure {
         uint256 maxProfit = type(uint256).max / BPS_DENOMINATOR;
-        uint256 protocolFee = (maxProfit * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 protocolFee = (maxProfit * SINGLE_SIDED_FEE_BPS) / BPS_DENOMINATOR;
         
         // Should not overflow
         assertTrue(protocolFee > 0, "Fee should be positive for large profit");
@@ -137,10 +138,10 @@ contract EidolonHookFuzzTest is Test {
         uint256 profit1 = 1000 ether;
         uint256 profit2 = 1000 ether;
         
-        uint256 fee1 = (profit1 * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
-        uint256 fee2 = (profit2 * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 fee1 = (profit1 * SINGLE_SIDED_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 fee2 = (profit2 * SINGLE_SIDED_FEE_BPS) / BPS_DENOMINATOR;
         
         assertEq(fee1, fee2, "Same profit should yield same fee");
-        assertEq(fee1, 150 ether, "15% of 1000 should be 150");
+        assertEq(fee1, 200 ether, "20% of 1000 should be 200");
     }
 }

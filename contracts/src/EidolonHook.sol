@@ -44,16 +44,44 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @dev Set at construction, never changes
     ISignatureTransfer public immutable PERMIT2;
 
-    /// @notice Protocol fee in basis points (1 = 0.01%)
-    /// @dev 15% of swap fees = 1500 basis points
-    uint16 public constant PROTOCOL_FEE_BPS = 1500;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FEE CONSTANTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Fee for "Lazy Investor" (Single-Sided) liquidity providers
+    /// @dev 20% of profit = 2000 basis points (provider keeps 80%)
+    uint16 public constant SINGLE_SIDED_FEE_BPS = 2000;
+
+    /// @notice Fee for "Pro LP" (Dual-Sided) liquidity providers
+    /// @dev 10% of profit = 1000 basis points (provider keeps 90%)
+    uint16 public constant DUAL_SIDED_FEE_BPS = 1000;
 
     /// @notice Basis points denominator
     uint16 public constant BPS_DENOMINATOR = 10000;
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // PROVIDER TYPES
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Provider type for fee calculation
+    enum ProviderType {
+        SINGLE_SIDED,   // Lazy Investor - 20% fee
+        DUAL_SIDED      // Pro LP - 10% fee
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // STORAGE
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Contract owner for admin functions
+    address public owner;
+
+    /// @notice Treasury address for fee withdrawals
+    address public treasury;
+
+    /// @notice Tracks membership expiry timestamps for fee exemptions
+    /// @dev provider => expiry timestamp (0 = no membership)
+    mapping(address => uint256) public membershipExpiry;
 
     /// @notice Tracks used permit nonces to prevent replay attacks
     /// @dev provider => nonce => used
@@ -65,6 +93,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
         uint256 amount;
         uint256 initialBalance;
         Currency currency;
+        ProviderType providerType;
         bool active;
     }
     mapping(bytes32 => mapping(address => MaterializationState)) private _materializations;
@@ -86,6 +115,52 @@ contract EidolonHook is BaseHook, IEidolonHook {
     }
     mapping(bytes32 => SwapContext) private _swapContexts;
 
+    /// @notice Tracks active providers for the current swap (multi-provider support)
+    /// @dev poolId => list of active provider addresses for current block
+    mapping(bytes32 => address[]) private _activeProviders;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EVENTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Emitted when membership is added or extended
+    event MembershipUpdated(address indexed provider, uint256 expiry);
+    
+    /// @notice Emitted when membership is revoked
+    event MembershipRevoked(address indexed provider);
+    
+    /// @notice Emitted when protocol fees are withdrawn
+    event FeesWithdrawn(Currency indexed currency, address indexed to, uint256 amount);
+    
+    /// @notice Emitted when treasury address is updated
+    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+    
+    /// @notice Emitted when ownership is transferred
+    event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CUSTOM ERRORS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Thrown when caller is not the owner
+    error NotOwner();
+    
+    /// @notice Thrown when address is zero
+    error ZeroAddress();
+    
+    /// @notice Thrown when withdrawal amount exceeds balance
+    error InsufficientFees();
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MODIFIERS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Restricts function access to owner only
+    modifier onlyOwner() {
+        if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════════════
@@ -98,6 +173,83 @@ contract EidolonHook is BaseHook, IEidolonHook {
         address _permit2
     ) BaseHook(_poolManager) {
         PERMIT2 = ISignatureTransfer(_permit2);
+        owner = msg.sender;
+        treasury = msg.sender;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ADMIN FUNCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Add or extend membership for a provider (fee exemption)
+    /// @param provider The provider address
+    /// @param duration Duration in seconds to add to membership
+    function addMembership(address provider, uint256 duration) external onlyOwner {
+        if (provider == address(0)) revert ZeroAddress();
+        uint256 currentExpiry = membershipExpiry[provider];
+        uint256 newExpiry;
+        
+        if (currentExpiry > block.timestamp) {
+            // Extend existing membership
+            newExpiry = currentExpiry + duration;
+        } else {
+            // Start new membership from now
+            newExpiry = block.timestamp + duration;
+        }
+        
+        membershipExpiry[provider] = newExpiry;
+        emit MembershipUpdated(provider, newExpiry);
+    }
+
+    /// @notice Revoke membership for a provider
+    /// @param provider The provider address
+    function revokeMembership(address provider) external onlyOwner {
+        membershipExpiry[provider] = 0;
+        emit MembershipRevoked(provider);
+    }
+
+    /// @notice Check if a provider has an active membership
+    /// @param provider The provider address
+    /// @return True if provider has active membership
+    function isMember(address provider) public view returns (bool) {
+        return membershipExpiry[provider] >= block.timestamp;
+    }
+
+    /// @notice Withdraw accumulated protocol fees
+    /// @param currency The currency to withdraw
+    /// @param amount The amount to withdraw (0 = all)
+    function withdrawFees(Currency currency, uint256 amount) external onlyOwner {
+        if (treasury == address(0)) revert ZeroAddress();
+        
+        uint256 available = protocolFees[currency];
+        uint256 withdrawAmount = amount == 0 ? available : amount;
+        
+        if (withdrawAmount > available) revert InsufficientFees();
+        
+        protocolFees[currency] -= withdrawAmount;
+        
+        // Transfer to treasury
+        currency.transfer(treasury, withdrawAmount);
+        
+        emit FeesWithdrawn(currency, treasury, withdrawAmount);
+    }
+
+    /// @notice Update the treasury address
+    /// @param newTreasury The new treasury address
+    function setTreasury(address newTreasury) external onlyOwner {
+        if (newTreasury == address(0)) revert ZeroAddress();
+        address oldTreasury = treasury;
+        treasury = newTreasury;
+        emit TreasuryUpdated(oldTreasury, newTreasury);
+    }
+
+    /// @notice Transfer ownership
+    /// @param newOwner The new owner address
+    function transferOwnership(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress();
+        address oldOwner = owner;
+        owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -130,11 +282,12 @@ contract EidolonHook is BaseHook, IEidolonHook {
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Internal hook called before a swap executes
-    /// @dev Validates Ghost Permit and materializes JIT liquidity
+    /// @dev Validates Ghost Permit(s) and materializes JIT liquidity
+    ///      Supports MULTI-PROVIDER aggregation: hookData can contain multiple permits
     /// @param sender The address initiating the swap
     /// @param key The pool being swapped on
     /// @param params The swap parameters
-    /// @param hookData Encoded Ghost Permit and signature data
+    /// @param hookData Encoded array of (GhostPermit, signature, witness) tuples
     /// @return selector The function selector
     /// @return beforeSwapDelta The delta to apply before the swap
     /// @return lpFeeOverride Fee override (0 = use pool default)
@@ -149,107 +302,118 @@ contract EidolonHook is BaseHook, IEidolonHook {
             return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
 
-        // Decode the Ghost Permit data
-        (
-            GhostPermit memory permit,
-            bytes memory signature,
-            WitnessLib.WitnessData memory witness
-        ) = abi.decode(hookData, (GhostPermit, bytes, WitnessLib.WitnessData));
+        PoolId poolId = key.toId();
+        bytes32 poolIdBytes = PoolId.unwrap(poolId);
 
         // ═══════════════════════════════════════════════════════════════════════
         // THE EXORCISM: Anti-MEV Defense
         // ═══════════════════════════════════════════════════════════════════════
         
-        PoolId poolId = key.toId();
-        bytes32 poolIdBytes = PoolId.unwrap(poolId);
-        
-        // Check for sandwich attack patterns
         SwapContext storage ctx = _swapContexts[poolIdBytes];
         bool isSameBlock = ctx.blockNumber == block.number;
         
         if (isSameBlock) {
-            // Multiple swaps in same block - potential sandwich
             ctx.swapCount++;
-            
-            // If this is the 3rd+ swap in a block AND sender differs from last,
-            // this looks like a sandwich (Bot -> Victim -> Bot pattern)
             if (ctx.swapCount >= 3 && ctx.lastSender != sender) {
-                // Credit the permit provider with a bot kill
-                botKillCount[permit.provider]++;
-                
-                // Emit exorcism event
                 emit ExorcismTriggered(poolId, sender);
-                
-                // REFUSE TO MATERIALIZE - the bot's attack fails
                 revert MEVDetected();
             }
         } else {
-            // New block - reset context
             ctx.blockNumber = block.number;
             ctx.swapCount = 1;
+            // Clear active providers from previous block
+            delete _activeProviders[poolIdBytes];
         }
         ctx.lastSender = sender;
 
         // ═══════════════════════════════════════════════════════════════════════
-        // VALIDATION: Checks (CEI Pattern) - The Shield
+        // MULTI-PROVIDER AGGREGATION: Decode and process all permits
         // ═══════════════════════════════════════════════════════════════════════
+        
+        // Decode array of permit bundles
+        (
+            GhostPermit[] memory permits,
+            bytes[] memory signatures,
+            WitnessLib.WitnessData[] memory witnesses
+        ) = abi.decode(hookData, (GhostPermit[], bytes[], WitnessLib.WitnessData[]));
 
-        // 1. Check permit hasn't expired
-        if (block.timestamp > permit.deadline) {
-            revert PermitExpired(permit.deadline, block.timestamp);
+        // Process each provider's permit
+        for (uint256 i = 0; i < permits.length; i++) {
+            GhostPermit memory permit = permits[i];
+            bytes memory signature = signatures[i];
+            WitnessLib.WitnessData memory witness = witnesses[i];
+
+            // ═══════════════════════════════════════════════════════════════════
+            // VALIDATION: The Shield - per provider
+            // ═══════════════════════════════════════════════════════════════════
+
+            // 1. Check permit hasn't expired
+            if (block.timestamp > permit.deadline) {
+                continue; // Skip expired permits, don't fail entire swap
+            }
+
+            // 2. Check permit hasn't been used (replay protection)
+            if (_usedNonces[permit.provider][permit.nonce]) {
+                continue; // Skip used permits
+            }
+
+            // 3. Validate witness matches current pool context
+            if (witness.poolId != poolIdBytes) {
+                continue; // Skip mismatched pool permits
+            }
+
+            // 4. Validate witness hook address
+            if (witness.hook != address(this)) {
+                continue; // Skip invalid hook permits
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // EFFECTS: Update state before external calls
+            // ═══════════════════════════════════════════════════════════════════
+
+            // Mark nonce as used
+            _usedNonces[permit.provider][permit.nonce] = true;
+
+            // Record materialization state for afterSwap settlement
+            uint256 initialBalance = permit.currency.balanceOfSelf();
+            _materializations[poolIdBytes][permit.provider] = MaterializationState({
+                amount: permit.amount,
+                initialBalance: initialBalance,
+                currency: permit.currency,
+                providerType: ProviderType.SINGLE_SIDED, // TODO: Determine from permit/hookData
+                active: true
+            });
+
+            // Track this provider for afterSwap processing
+            _activeProviders[poolIdBytes].push(permit.provider);
+            
+            // Credit bot kill if this is a protective materialization
+            if (isSameBlock && ctx.swapCount >= 2) {
+                botKillCount[permit.provider]++;
+            }
+
+            // ═══════════════════════════════════════════════════════════════════
+            // INTERACTIONS: External calls (Permit2)
+            // ═══════════════════════════════════════════════════════════════════
+
+            // Pull funds from provider via Permit2 with Witness verification
+            _pullFundsWithWitness(permit, signature, witness);
+
+            // Emit materialization event
+            emit LiquidityMaterialized(permit.provider, poolId, permit.amount, 0);
         }
-
-        // 2. Check permit hasn't been used (replay protection)
-        if (_usedNonces[permit.provider][permit.nonce]) {
-            revert InvalidSignature();
-        }
-
-        // 3. Validate witness matches current pool context
-        if (witness.poolId != PoolId.unwrap(poolId)) {
-            revert WitnessMismatch(PoolId.wrap(witness.poolId), poolId);
-        }
-
-        // 4. Validate witness hook address
-        if (witness.hook != address(this)) {
-            revert InvalidSignature();
-        }
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // EFFECTS: Update state before external calls
-        // ═══════════════════════════════════════════════════════════════════════
-
-        // Mark nonce as used
-        _usedNonces[permit.provider][permit.nonce] = true;
-
-        // Record materialization state for afterSwap settlement
-        uint256 initialBalance = permit.currency.balanceOfSelf();
-        _materializations[PoolId.unwrap(poolId)][permit.provider] = MaterializationState({
-            amount: permit.amount,
-            initialBalance: initialBalance,
-            currency: permit.currency,
-            active: true
-        });
-
-        // ═══════════════════════════════════════════════════════════════════════
-        // INTERACTIONS: External calls (Permit2)
-        // ═══════════════════════════════════════════════════════════════════════
-
-        // Pull funds from user via Permit2 with Witness verification
-        _pullFundsWithWitness(permit, signature, witness);
-
-        // Emit materialization event
-        emit LiquidityMaterialized(permit.provider, poolId, permit.amount, 0);
 
         return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 
     /// @notice Internal hook called after a swap executes
-    /// @dev Settles the swap, takes protocol fee, and returns funds to provider
+    /// @dev Settles all active providers, takes protocol fee, and returns funds
+    ///      Supports MULTI-PROVIDER: processes all providers tracked in beforeSwap
     /// @param sender The address that initiated the swap
     /// @param key The pool that was swapped on
     /// @param params The swap parameters
     /// @param delta The balance changes from the swap
-    /// @param hookData The same hookData from beforeSwap
+    /// @param hookData The same hookData from beforeSwap (unused - we use _activeProviders)
     /// @return selector The function selector
     /// @return afterSwapDelta The delta to apply after the swap
     function _afterSwap(
@@ -259,57 +423,61 @@ contract EidolonHook is BaseHook, IEidolonHook {
         BalanceDelta delta,
         bytes calldata hookData
     ) internal override returns (bytes4, int128) {
-        // If no hookData, nothing to settle
-        if (hookData.length == 0) {
-            return (this.afterSwap.selector, 0);
-        }
-
-        // Decode to get provider address
-        (GhostPermit memory permit,,) = abi.decode(
-            hookData, 
-            (GhostPermit, bytes, WitnessLib.WitnessData)
-        );
-
         PoolId poolId = key.toId();
-        MaterializationState storage state = _materializations[PoolId.unwrap(poolId)][permit.provider];
-
-        // Skip if no active materialization
-        if (!state.active) {
+        bytes32 poolIdBytes = PoolId.unwrap(poolId);
+        
+        // Get all active providers for this pool
+        address[] storage providers = _activeProviders[poolIdBytes];
+        
+        // If no active providers, nothing to settle
+        if (providers.length == 0) {
             return (this.afterSwap.selector, 0);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        // SETTLEMENT: Calculate fees and return funds
+        // MULTI-PROVIDER SETTLEMENT: Process each provider
         // ═══════════════════════════════════════════════════════════════════════
 
-        uint256 currentBalance = state.currency.balanceOfSelf();
-        
-        // ATOMIC GUARD: Ensure no loss occurred
-        if (currentBalance < state.initialBalance) {
-            revert AtomicGuardViolation(state.initialBalance, currentBalance);
+        for (uint256 i = 0; i < providers.length; i++) {
+            address provider = providers[i];
+            MaterializationState storage state = _materializations[poolIdBytes][provider];
+
+            // Skip if no active materialization (shouldn't happen, but safety check)
+            if (!state.active) {
+                continue;
+            }
+
+            uint256 currentBalance = state.currency.balanceOfSelf();
+            
+            // ATOMIC GUARD: Ensure no loss occurred for this provider
+            if (currentBalance < state.initialBalance) {
+                revert AtomicGuardViolation(state.initialBalance, currentBalance);
+            }
+
+            uint256 profit = currentBalance - state.initialBalance;
+            
+            // Calculate protocol fee based on provider type and membership
+            uint16 feeBps = _getProviderFee(provider, state.providerType);
+            uint256 protocolFee = (profit * feeBps) / BPS_DENOMINATOR;
+            uint256 providerProfit = profit - protocolFee;
+
+            // Accumulate protocol fees
+            if (protocolFee > 0) {
+                protocolFees[state.currency] += protocolFee;
+            }
+
+            // Clear materialization state
+            state.active = false;
+
+            // Return funds + profit to provider
+            uint256 returnAmount = currentBalance - protocolFee;
+            if (returnAmount > 0) {
+                _returnFunds(provider, state.currency, returnAmount);
+            }
+
+            // Emit settlement event with actual fees earned
+            emit LiquidityMaterialized(provider, poolId, state.amount, providerProfit);
         }
-
-        uint256 profit = currentBalance - state.initialBalance;
-        
-        // Calculate protocol fee (15% of profit)
-        uint256 protocolFee = (profit * PROTOCOL_FEE_BPS) / BPS_DENOMINATOR;
-        uint256 providerProfit = profit - protocolFee;
-
-        // Accumulate protocol fees
-        if (protocolFee > 0) {
-            protocolFees[state.currency] += protocolFee;
-        }
-
-        // Clear materialization state
-        state.active = false;
-
-        // Return funds + profit to provider
-        if (currentBalance - protocolFee > 0) {
-            _returnFunds(permit.provider, state.currency, currentBalance - protocolFee);
-        }
-
-        // Update event with actual fees earned
-        emit LiquidityMaterialized(permit.provider, poolId, state.amount, providerProfit);
 
         return (this.afterSwap.selector, 0);
     }
@@ -353,6 +521,24 @@ contract EidolonHook is BaseHook, IEidolonHook {
             WitnessLib.WITNESS_TYPE_STRING,
             signature
         );
+    }
+
+    /// @notice Gets the protocol fee for a provider based on type and membership
+    /// @param provider The provider address
+    /// @param providerType The type of liquidity provision
+    /// @return The fee in basis points
+    function _getProviderFee(address provider, ProviderType providerType) internal view returns (uint16) {
+        // Subscribers pay no fees
+        if (isMember(provider)) {
+            return 0;
+        }
+        
+        // Tiered fees based on provider type
+        if (providerType == ProviderType.DUAL_SIDED) {
+            return DUAL_SIDED_FEE_BPS;  // 10% - Pro LP
+        }
+        
+        return SINGLE_SIDED_FEE_BPS;  // 20% - Lazy Investor
     }
 
     /// @notice Returns funds to the provider after swap settlement

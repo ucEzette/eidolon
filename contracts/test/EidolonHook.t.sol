@@ -106,13 +106,67 @@ contract EidolonHookTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PROTOCOL FEE TESTS
+    // TIERED FEE TESTS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Test protocol fee constants
-    function test_protocolFeeConstants() public view {
-        assertEq(hook.PROTOCOL_FEE_BPS(), 1500, "Protocol fee should be 15%");
+    /// @notice Test tiered fee constants
+    function test_tieredFeeConstants() public view {
+        assertEq(hook.SINGLE_SIDED_FEE_BPS(), 2000, "Single-sided fee should be 20%");
+        assertEq(hook.DUAL_SIDED_FEE_BPS(), 1000, "Dual-sided fee should be 10%");
         assertEq(hook.BPS_DENOMINATOR(), 10000, "BPS denominator should be 10000");
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MEMBERSHIP TESTS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Test owner is set correctly on deployment
+    function test_ownerIsDeployer() public view {
+        assertEq(hook.owner(), address(this), "Owner should be deployer");
+        assertEq(hook.treasury(), address(this), "Treasury should be deployer initially");
+    }
+
+    /// @notice Test adding membership
+    function test_addMembership() public {
+        assertFalse(hook.isMember(provider), "Provider should not be member initially");
+        
+        // Add 30 days membership
+        hook.addMembership(provider, 30 days);
+        
+        assertTrue(hook.isMember(provider), "Provider should be member after adding");
+        assertGt(hook.membershipExpiry(provider), block.timestamp, "Expiry should be in future");
+    }
+
+    /// @notice Test revoking membership
+    function test_revokeMembership() public {
+        // Add membership
+        hook.addMembership(provider, 30 days);
+        assertTrue(hook.isMember(provider), "Should be member");
+        
+        // Revoke it
+        hook.revokeMembership(provider);
+        assertFalse(hook.isMember(provider), "Should not be member after revoke");
+    }
+
+    /// @notice Test only owner can add membership
+    function test_onlyOwnerCanAddMembership() public {
+        vm.prank(provider);
+        vm.expectRevert(EidolonHook.NotOwner.selector);
+        hook.addMembership(swapper, 30 days);
+    }
+
+    /// @notice Test treasury update
+    function test_setTreasury() public {
+        address newTreasury = makeAddr("treasury");
+        hook.setTreasury(newTreasury);
+        assertEq(hook.treasury(), newTreasury, "Treasury should be updated");
+    }
+
+    /// @notice Test ownership transfer
+    function test_transferOwnership() public {
+        address newOwner = makeAddr("newOwner");
+        hook.transferOwnership(newOwner);
+        assertEq(hook.owner(), newOwner, "Owner should be transferred");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
