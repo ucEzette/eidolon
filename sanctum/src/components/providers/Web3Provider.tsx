@@ -1,12 +1,13 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { WagmiConfig } from "wagmi";
+import { WagmiProvider } from "wagmi";
 import { config } from "@/config/web3";
 import { useState, type ReactNode } from "react";
+import { CircleWalletProvider } from "./CircleWalletProvider";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WEB3 PROVIDER
+// WEB3 PROVIDER (wagmi v2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface Web3ProviderProps {
@@ -27,8 +28,10 @@ export function Web3Provider({ children }: Web3ProviderProps) {
     );
 
     return (
-        <WagmiConfig config={config}>
-            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-        </WagmiConfig>
+        <WagmiProvider config={config}>
+            <QueryClientProvider client={queryClient}>
+                <CircleWalletProvider>{children}</CircleWalletProvider>
+            </QueryClientProvider>
+        </WagmiProvider>
     );
 }

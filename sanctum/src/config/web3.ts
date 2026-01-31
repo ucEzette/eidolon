@@ -1,43 +1,30 @@
 "use client";
 
-import { configureChains, createConfig } from "wagmi";
+import { http, createConfig } from "wagmi";
 import { baseSepolia, mainnet } from "wagmi/chains";
-import { publicProvider } from "wagmi/providers/public";
-import { InjectedConnector } from "wagmi/connectors/injected";
-import { WalletConnectConnector } from "wagmi/connectors/walletConnect";
+import { injected, walletConnect } from "wagmi/connectors";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CHAIN CONFIGURATION
-// ═══════════════════════════════════════════════════════════════════════════════
-
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-    [baseSepolia, mainnet],
-    [publicProvider()]
-);
-
-export { chains };
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// WAGMI CONFIG
+// CHAIN CONFIGURATION (wagmi v2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // WalletConnect project ID
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "demo";
 
 export const config = createConfig({
-    autoConnect: true,
+    chains: [baseSepolia, mainnet],
     connectors: [
-        new InjectedConnector({ chains }),
-        new WalletConnectConnector({
-            chains,
-            options: {
-                projectId,
-            },
-        }),
+        injected(),
+        walletConnect({ projectId }),
     ],
-    publicClient,
-    webSocketPublicClient,
+    transports: {
+        [baseSepolia.id]: http(),
+        [mainnet.id]: http(),
+    },
 });
+
+// Export chains for use elsewhere
+export const chains = [baseSepolia, mainnet] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTRACT ADDRESSES

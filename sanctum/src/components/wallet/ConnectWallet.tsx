@@ -1,36 +1,100 @@
 "use client";
 
-import { useAccount, useConnect, useDisconnect, useBalance, useNetwork } from "wagmi";
+import { useState } from "react";
+import { useAccount, useConnect, useDisconnect, useBalance } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
+import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONNECT WALLET BUTTON
+// WALLET CONNECTION METHODS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type WalletMethod = "injected" | "walletconnect" | "passkey";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONNECT WALLET BUTTON (wagmi v2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function ConnectWallet() {
-  const { address, isConnected } = useAccount();
-  const { chain } = useNetwork();
-  const { connectors, connect, isLoading } = useConnect();
-  const { disconnect } = useDisconnect();
+  // Wagmi hooks for traditional wallets (v2 API)
+  const { address: wagmiAddress, isConnected: wagmiConnected, chain } = useAccount();
+  const { connectors, connect, isPending: wagmiLoading } = useConnect();
+  const { disconnect: wagmiDisconnect } = useDisconnect();
   const { data: balance } = useBalance({
-    address,
+    address: wagmiAddress,
     chainId: baseSepolia.id,
   });
 
+  // Circle hooks for passkey wallets
+  const {
+    isConnected: circleConnected,
+    isConnecting: circleConnecting,
+    address: circleAddress,
+    username: circleUsername,
+    registerPasskey,
+    loginWithPasskey,
+    disconnect: circleDisconnect,
+    error: circleError,
+  } = useCircleWallet();
+
+  // Local state
+  const [showMethods, setShowMethods] = useState(false);
+  const [passkeyMode, setPasskeyMode] = useState<"register" | "login" | null>(null);
+  const [passkeyUsername, setPasskeyUsername] = useState("");
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+
+  // Unified connection state
+  const isConnected = wagmiConnected || circleConnected;
+  const address = wagmiAddress || circleAddress;
+  const isLoading = wagmiLoading || circleConnecting;
+
+  // Handle passkey submission
+  const handlePasskeySubmit = async () => {
+    if (!passkeyUsername.trim()) {
+      setPasskeyError("Username is required");
+      return;
+    }
+
+    setPasskeyError(null);
+    try {
+      if (passkeyMode === "register") {
+        await registerPasskey(passkeyUsername);
+      } else {
+        await loginWithPasskey(passkeyUsername);
+      }
+      setPasskeyMode(null);
+      setPasskeyUsername("");
+      setShowMethods(false);
+    } catch (error: any) {
+      setPasskeyError(error.message || "Failed to authenticate with passkey");
+    }
+  };
+
+  // Handle disconnect
+  const handleDisconnect = () => {
+    if (wagmiConnected) {
+      wagmiDisconnect();
+    }
+    if (circleConnected) {
+      circleDisconnect();
+    }
+  };
+
+  // Connected state UI
   if (isConnected && address) {
     return (
       <div className="flex items-center gap-4">
-        {/* Network Badge */}
+        {/* Wallet Type Badge */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           <span className="text-sm text-violet-300">
-            {chain?.name || "Unknown"}
+            {circleConnected ? `Passkey: ${circleUsername}` : chain?.name || "Unknown"}
           </span>
         </div>
 
         {/* Balance */}
         {balance && (
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-gray-400 hidden md:inline">
             {parseFloat(balance.formatted).toFixed(4)} {balance.symbol}
           </span>
         )}
@@ -43,9 +107,10 @@ export function ConnectWallet() {
 
         {/* Disconnect Button */}
         <button
-          onClick={() => disconnect()}
+          onClick={handleDisconnect}
           className="px-3 py-2 rounded-lg text-gray-400 hover:text-red-400 
                      hover:bg-red-500/10 transition-all duration-300"
+          title="Disconnect"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -67,16 +132,57 @@ export function ConnectWallet() {
     );
   }
 
+  // Passkey input modal
+  if (passkeyMode) {
+    return (
+      <div className="relative">
+        <div className="flex flex-col gap-3 p-4 bg-black/80 rounded-2xl border border-violet-500/30 shadow-2xl min-w-[280px]">
+          <h3 className="text-sm font-bold text-white">
+            {passkeyMode === "register" ? "Create Passkey Wallet" : "Login with Passkey"}
+          </h3>
+
+          <input
+            type="text"
+            placeholder="Enter username"
+            value={passkeyUsername}
+            onChange={(e) => setPasskeyUsername(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handlePasskeySubmit()}
+            className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white 
+                       placeholder:text-gray-500 focus:outline-none focus:border-violet-500"
+            autoFocus
+          />
+
+          {(passkeyError || circleError) && (
+            <p className="text-xs text-red-400">{passkeyError || circleError?.message}</p>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setPasskeyMode(null); setPasskeyError(null); }}
+              className="flex-1 px-4 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 
+                         text-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handlePasskeySubmit}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 
+                         text-white text-sm font-semibold transition-colors disabled:opacity-50"
+            >
+              {isLoading ? "..." : passkeyMode === "register" ? "Register" : "Login"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Disconnected state - show connection options
   return (
-    <div className="relative group">
+    <div className="relative">
       <button
-        onClick={() => {
-          // Connect with injected wallet (MetaMask, etc.)
-          const injectedConnector = connectors.find(c => c.id === 'injected');
-          if (injectedConnector) {
-            connect({ connector: injectedConnector });
-          }
-        }}
+        onClick={() => setShowMethods(!showMethods)}
         disabled={isLoading}
         className="px-6 py-3 rounded-xl overflow-hidden
                    bg-gradient-to-r from-violet-600 to-purple-600 
@@ -116,6 +222,94 @@ export function ConnectWallet() {
           )}
         </span>
       </button>
+
+      {/* Dropdown menu */}
+      {showMethods && (
+        <div className="absolute top-full right-0 mt-2 w-64 p-2 bg-black/90 rounded-2xl border border-violet-500/30 
+                        shadow-2xl shadow-violet-500/10 backdrop-blur-xl z-50">
+          <div className="text-xs text-gray-500 px-3 py-2 uppercase tracking-wider">Connect with</div>
+
+          {/* Circle Passkey Options */}
+          <button
+            onClick={() => { setPasskeyMode("register"); setShowMethods(false); }}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-violet-500/10 
+                       text-white transition-colors group"
+          >
+            <div className="size-8 rounded-full bg-gradient-to-br from-cyan-500 to-violet-500 
+                            flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-[16px]">fingerprint</span>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-medium">Create Passkey</div>
+              <div className="text-xs text-gray-500">New smart wallet</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { setPasskeyMode("login"); setShowMethods(false); }}
+            className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-violet-500/10 
+                       text-white transition-colors group"
+          >
+            <div className="size-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-500 
+                            flex items-center justify-center group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-[16px]">passkey</span>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-medium">Login with Passkey</div>
+              <div className="text-xs text-gray-500">Existing wallet</div>
+            </div>
+          </button>
+
+          <div className="h-px bg-white/10 my-2" />
+
+          {/* Traditional Wallet Options (wagmi v2) */}
+          {connectors.filter(c => c.type === 'injected').map((connector) => (
+            <button
+              key={connector.uid}
+              onClick={() => {
+                connect({ connector });
+                setShowMethods(false);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-violet-500/10 
+                         text-white transition-colors group"
+            >
+              <div className="size-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 
+                              flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg className="w-4 h-4" viewBox="0 0 40 40" fill="none">
+                  <path d="M20 40c11.046 0 20-8.954 20-20S31.046 0 20 0 0 8.954 0 20s8.954 20 20 20z" fill="#F6851B" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <div className="text-sm font-medium">{connector.name}</div>
+                <div className="text-xs text-gray-500">Browser wallet</div>
+              </div>
+            </button>
+          ))}
+
+          {connectors.filter(c => c.type === 'walletConnect').map((connector) => (
+            <button
+              key={connector.uid}
+              onClick={() => {
+                connect({ connector });
+                setShowMethods(false);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-violet-500/10 
+                         text-white transition-colors group"
+            >
+              <div className="size-8 rounded-full bg-gradient-to-br from-blue-500 to-sky-400 
+                              flex items-center justify-center group-hover:scale-110 transition-transform">
+                <svg className="w-4 h-4" viewBox="0 0 32 32" fill="white">
+                  <path d="M9.58 11.28c3.55-3.48 9.29-3.48 12.84 0l.43.42a.44.44 0 0 1 0 .63l-1.46 1.43a.23.23 0 0 1-.32 0l-.59-.57a6.52 6.52 0 0 0-9.06 0l-.63.62a.23.23 0 0 1-.32 0l-1.46-1.43a.44.44 0 0 1 0-.63l.57-.47zm15.87 2.96 1.3 1.27a.44.44 0 0 1 0 .63l-5.85 5.73a.46.46 0 0 1-.64 0l-4.15-4.07a.12.12 0 0 0-.16 0l-4.15 4.07a.46.46 0 0 1-.64 0l-5.85-5.73a.44.44 0 0 1 0-.63l1.3-1.27a.46.46 0 0 1 .64 0l4.15 4.06c.04.05.12.05.16 0l4.15-4.06a.46.46 0 0 1 .64 0l4.15 4.06c.04.05.12.05.16 0l4.15-4.06a.46.46 0 0 1 .64 0z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <div className="text-sm font-medium">{connector.name}</div>
+                <div className="text-xs text-gray-500">Mobile & desktop</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
