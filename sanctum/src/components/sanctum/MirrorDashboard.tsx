@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useEidolonHook } from "@/hooks/useEidolonHook";
 
 export function MirrorDashboard() {
     const [showRevokeModal, setShowRevokeModal] = useState(false);
+    const { fees, membership } = useEidolonHook();
+
+    // For demo purposes, we'll calculate rewards based on membership status
+    // In a real app, this would query the contract or an indexer for actual earnings
+    const userTier = membership.isMember ? "Pro Member" : "Standard User";
+    const feeTier = membership.isMember ? "0%" : `${fees.dualSided}%`;
 
     return (
         <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 lg:px-8">
@@ -22,7 +29,7 @@ export function MirrorDashboard() {
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
                                     <p className="font-bold text-primary text-xs mb-1">Virtual TVL</p>
-                                    <p className="text-white/60 text-xs">The total value of all Ghost Permits combined. Unlike traditional TVL, this represents &quot;phantom&quot; liquidity that materializes on-demand without being locked.</p>
+                                    <p className="text-white/60 text-xs">The total value of all Ghost Permits combined. Unlike traditional TVL, this represents &quot;phantom&quot; liquidity that materializes on-demand.</p>
                                 </div>
                             </div>
                         </div>
@@ -42,26 +49,27 @@ export function MirrorDashboard() {
                     <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-secondary/10 blur-3xl transition-all group-hover:bg-secondary/20"></div>
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Ghost Permits</p>
-                            {/* Info Tooltip */}
+                            <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Account Status</p>
                             <div className="relative group/info">
                                 <button className="p-0.5 rounded-full hover:bg-white/10 transition-colors">
                                     <span className="material-symbols-outlined text-[14px] text-slate-500 group-hover/info:text-secondary">info</span>
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-secondary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-secondary text-xs mb-1">Ghost Permits</p>
-                                    <p className="text-white/60 text-xs">Signed authorizations allowing your tokens to be used for Just-In-Time liquidity. Your tokens stay in your wallet until a trade needs them.</p>
+                                    <p className="font-bold text-secondary text-xs mb-1">Membership Tier</p>
+                                    <p className="text-white/60 text-xs">{membership.isMember ? "You have an active membership defined by the contract." : "Standard users pay protocol fees on yield."}</p>
                                 </div>
                             </div>
                         </div>
                         <span className="material-symbols-outlined text-slate-500">badge</span>
                     </div>
                     <div className="flex items-baseline gap-3">
-                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">1,024</h3>
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400 border border-emerald-500/20">Active</span>
+                        <h3 className="text-2xl font-bold text-white font-mono tracking-tighter">{userTier}</h3>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${membership.isMember ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+                            {membership.isMember ? 'Active' : 'Basic'}
+                        </span>
                     </div>
                     <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
-                        <span>System Status: Stable</span>
+                        <span>Current Fee Rate: <span className="text-white">{feeTier}</span></span>
                     </div>
                 </div>
 
@@ -78,7 +86,7 @@ export function MirrorDashboard() {
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
                                     <p className="font-bold text-primary text-xs mb-1">EID Rewards</p>
-                                    <p className="text-white/60 text-xs">Protocol tokens earned from your Ghost Permits being used to service trades. Rewards accumulate per epoch and can be claimed anytime.</p>
+                                    <p className="text-white/60 text-xs">Protocol tokens earned from your Ghost Permits being used to service trades. Rewards accumulate per epoch.</p>
                                 </div>
                             </div>
                         </div>

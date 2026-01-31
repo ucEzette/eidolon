@@ -3,11 +3,15 @@ const nextConfig = {
   // Transpile wagmi/viem packages for SSR compatibility
   transpilePackages: [
     "@circle-fin/modular-wallets-core",
+    "@walletconnect/ethereum-provider",
+    "@reown/appkit",
+    "@wagmi/connectors",
+    "wagmi",
   ],
   // Disable static export optimization for pages with Web3 deps
   experimental: {
     // Ensure client components are properly handled
-    serverComponentsExternalPackages: ["viem", "wagmi"],
+    serverComponentsExternalPackages: [],
   },
   // Suppress hydration warnings from web3 libs
   reactStrictMode: true,

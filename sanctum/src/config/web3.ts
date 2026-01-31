@@ -1,8 +1,35 @@
 "use client";
 
 import { http, createConfig } from "wagmi";
-import { baseSepolia, mainnet } from "wagmi/chains";
+import { type Chain } from "viem";
+import { mainnet } from "wagmi/chains";
 import { injected, walletConnect } from "wagmi/connectors";
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UNICHAIN SEPOLIA CHAIN DEFINITION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const unichainSepolia: Chain = {
+    id: 1301,
+    name: "Unichain Sepolia",
+    nativeCurrency: {
+        name: "Ether",
+        symbol: "ETH",
+        decimals: 18,
+    },
+    rpcUrls: {
+        default: {
+            http: ["https://sepolia.unichain.org"],
+        },
+    },
+    blockExplorers: {
+        default: {
+            name: "Uniscan",
+            url: "https://sepolia.uniscan.xyz",
+        },
+    },
+    testnet: true,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHAIN CONFIGURATION (wagmi v2)
@@ -12,30 +39,30 @@ import { injected, walletConnect } from "wagmi/connectors";
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "demo";
 
 export const config = createConfig({
-    chains: [baseSepolia, mainnet],
+    chains: [unichainSepolia, mainnet],
     connectors: [
         injected(),
         walletConnect({ projectId }),
     ],
     transports: {
-        [baseSepolia.id]: http(),
+        [unichainSepolia.id]: http("https://sepolia.unichain.org"),
         [mainnet.id]: http(),
     },
 });
 
 // Export chains for use elsewhere
-export const chains = [baseSepolia, mainnet] as const;
+export const chains = [unichainSepolia, mainnet] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTRACT ADDRESSES
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const CONTRACTS = {
-    // Base Sepolia testnet addresses (to be deployed)
-    baseSepolia: {
-        eidolonHook: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    // Unichain Sepolia testnet - DEPLOYED & VERIFIED
+    unichainSepolia: {
+        eidolonHook: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8" as `0x${string}`,
         permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as `0x${string}`,
-        poolManager: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        poolManager: "0x00B036B58a818B1BC34d502D3fE730Db729e62AC" as `0x${string}`,
     },
 } as const;
 
@@ -45,6 +72,18 @@ export const CONTRACTS = {
 
 export const PERMIT2_DOMAIN = {
     name: "Permit2",
-    chainId: baseSepolia.id,
-    verifyingContract: CONTRACTS.baseSepolia.permit2,
+    chainId: unichainSepolia.id,
+    verifyingContract: CONTRACTS.unichainSepolia.permit2,
+} as const;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FEE CONSTANTS (matching smart contract)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const FEES = {
+    SINGLE_SIDED_BPS: 2000,  // 20% (Lazy Investor)
+    DUAL_SIDED_BPS: 1000,   // 10% (Pro LP)
+    SUBSCRIBER_BPS: 0,       // 0%  (Members)
+    MAX_BPS: 5000,          // 50% cap
+    BPS_DENOMINATOR: 10000,
 } as const;
