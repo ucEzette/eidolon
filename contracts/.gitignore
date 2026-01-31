@@ -1,0 +1,154 @@
+# ========================================
+# EIDOLON Protocol - .gitignore
+# ========================================
+
+# ========================================
+# Environment & Secrets
+# ========================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+*.pem
+*.key
+secrets/
+.secrets
+
+# ========================================
+# Foundry / Solidity
+# ========================================
+contracts/out/
+contracts/cache/
+contracts/cache_forge/
+contracts/broadcast/
+contracts/artifacts/
+*.sol.ast
+*.sol.ast.json
+lcov.info
+coverage/
+coverage.json
+
+# ========================================
+# Node.js / Next.js
+# ========================================
+node_modules/
+.next/
+.turbo/
+out/
+build/
+dist/
+*.tsbuildinfo
+.npm
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# ========================================
+# TypeScript
+# ========================================
+*.tsbuildinfo
+*.js.map
+*.d.ts.map
+
+# ========================================
+# OS Generated
+# ========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# ========================================
+# IDE / Editor
+# ========================================
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.tm_properties
+**/nbproject/private/
+.nb-gradle/
+
+# ========================================
+# Testing & Coverage
+# ========================================
+coverage/
+*.lcov
+.nyc_output
+jest-results.json
+test-results/
+playwright-report/
+playwright/.cache/
+
+# ========================================
+# Logs & Debug
+# ========================================
+logs/
+*.log
+debug.log
+error.log
+
+# ========================================
+# Docker
+# ========================================
+.docker/
+docker-compose.override.yml
+
+# ========================================
+# Vercel / Deployment
+# ========================================
+.vercel
+
+# ========================================
+# Rust (for The Medium bot option)
+# ========================================
+medium/target/
+**/*.rs.bk
+Cargo.lock
+
+# ========================================
+# Flashbots & MEV
+# ========================================
+bundles/
+*.bundle.json
+
+# ========================================
+# Database (local dev)
+# ========================================
+*.sqlite
+*.sqlite3
+*.db
+prisma/migrations/**/migration_lock.toml
+
+# ========================================
+# Circle SDK
+# ========================================
+.circle/
+
+# ========================================
+# Temporary Files
+# ========================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak

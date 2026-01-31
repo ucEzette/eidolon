@@ -8,7 +8,7 @@ import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
 import {EidolonHook} from "../src/EidolonHook.sol";
 
 contract DeployEidolon is Script {
-    address constant POOL_MANAGER = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
+    address constant POOL_MANAGER = 0x00B036B58a818B1BC34d502D3fE730Db729e62AC;
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
     function run() external {
