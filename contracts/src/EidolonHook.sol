@@ -45,16 +45,19 @@ contract EidolonHook is BaseHook, IEidolonHook {
     ISignatureTransfer public immutable PERMIT2;
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // FEE CONSTANTS
+    // FEE CONFIGURATION
     // ═══════════════════════════════════════════════════════════════════════════
 
     /// @notice Fee for "Lazy Investor" (Single-Sided) liquidity providers
-    /// @dev 20% of profit = 2000 basis points (provider keeps 80%)
-    uint16 public constant SINGLE_SIDED_FEE_BPS = 2000;
+    /// @dev Default: 20% of profit = 2000 basis points (provider keeps 80%)
+    uint16 public singleSidedFeeBps = 2000;
 
     /// @notice Fee for "Pro LP" (Dual-Sided) liquidity providers
-    /// @dev 10% of profit = 1000 basis points (provider keeps 90%)
-    uint16 public constant DUAL_SIDED_FEE_BPS = 1000;
+    /// @dev Default: 10% of profit = 1000 basis points (provider keeps 90%)
+    uint16 public dualSidedFeeBps = 1000;
+
+    /// @notice Maximum allowed fee in basis points (50% cap)
+    uint16 public constant MAX_FEE_BPS = 5000;
 
     /// @notice Basis points denominator
     uint16 public constant BPS_DENOMINATOR = 10000;
@@ -137,6 +140,9 @@ contract EidolonHook is BaseHook, IEidolonHook {
     
     /// @notice Emitted when ownership is transferred
     event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
+    
+    /// @notice Emitted when fee rates are updated
+    event FeesUpdated(uint16 singleSidedFeeBps, uint16 dualSidedFeeBps);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CUSTOM ERRORS
@@ -150,6 +156,9 @@ contract EidolonHook is BaseHook, IEidolonHook {
     
     /// @notice Thrown when withdrawal amount exceeds balance
     error InsufficientFees();
+    
+    /// @notice Thrown when fee exceeds maximum allowed
+    error FeeTooHigh();
 
     // ═══════════════════════════════════════════════════════════════════════════
     // MODIFIERS
@@ -241,6 +250,19 @@ contract EidolonHook is BaseHook, IEidolonHook {
         address oldTreasury = treasury;
         treasury = newTreasury;
         emit TreasuryUpdated(oldTreasury, newTreasury);
+    }
+
+    /// @notice Update fee rates for provider types
+    /// @param newSingleSidedFeeBps New fee for single-sided (Lazy Investor) in basis points
+    /// @param newDualSidedFeeBps New fee for dual-sided (Pro LP) in basis points
+    function setFees(uint16 newSingleSidedFeeBps, uint16 newDualSidedFeeBps) external onlyOwner {
+        if (newSingleSidedFeeBps > MAX_FEE_BPS) revert FeeTooHigh();
+        if (newDualSidedFeeBps > MAX_FEE_BPS) revert FeeTooHigh();
+        
+        singleSidedFeeBps = newSingleSidedFeeBps;
+        dualSidedFeeBps = newDualSidedFeeBps;
+        
+        emit FeesUpdated(newSingleSidedFeeBps, newDualSidedFeeBps);
     }
 
     /// @notice Transfer ownership
@@ -380,7 +402,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
                 amount: permit.amount,
                 initialBalance: initialBalance,
                 currency: permit.currency,
-                providerType: ProviderType.SINGLE_SIDED, // TODO: Determine from permit/hookData
+                providerType: permit.isDualSided ? ProviderType.DUAL_SIDED : ProviderType.SINGLE_SIDED,
                 active: true
             });
 
@@ -535,10 +557,10 @@ contract EidolonHook is BaseHook, IEidolonHook {
         
         // Tiered fees based on provider type
         if (providerType == ProviderType.DUAL_SIDED) {
-            return DUAL_SIDED_FEE_BPS;  // 10% - Pro LP
+            return dualSidedFeeBps;  // Pro LP
         }
         
-        return SINGLE_SIDED_FEE_BPS;  // 20% - Lazy Investor
+        return singleSidedFeeBps;  // Lazy Investor
     }
 
     /// @notice Returns funds to the provider after swap settlement

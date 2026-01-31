@@ -93,6 +93,8 @@ interface IEidolonHook {
         uint256 deadline;
         /// @notice Unique nonce to prevent replay attacks
         uint256 nonce;
+        /// @notice True if provider is providing dual-sided liquidity (Pro LP)
+        bool isDualSided;
     }
 
     /// @notice Witness data for Permit2 verification

@@ -109,11 +109,33 @@ contract EidolonHookTest is Test {
     // TIERED FEE TESTS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice Test tiered fee constants
-    function test_tieredFeeConstants() public view {
-        assertEq(hook.SINGLE_SIDED_FEE_BPS(), 2000, "Single-sided fee should be 20%");
-        assertEq(hook.DUAL_SIDED_FEE_BPS(), 1000, "Dual-sided fee should be 10%");
+    /// @notice Test default tiered fee values
+    function test_tieredFeeDefaults() public view {
+        assertEq(hook.singleSidedFeeBps(), 2000, "Single-sided fee should be 20%");
+        assertEq(hook.dualSidedFeeBps(), 1000, "Dual-sided fee should be 10%");
         assertEq(hook.BPS_DENOMINATOR(), 10000, "BPS denominator should be 10000");
+        assertEq(hook.MAX_FEE_BPS(), 5000, "Max fee should be 50%");
+    }
+
+    /// @notice Test fee modification via setFees
+    function test_setFees() public {
+        // Update fees
+        hook.setFees(1500, 500);
+        assertEq(hook.singleSidedFeeBps(), 1500, "Single fee should be updated to 15%");
+        assertEq(hook.dualSidedFeeBps(), 500, "Dual fee should be updated to 5%");
+    }
+
+    /// @notice Test setFees reverts if exceeds max
+    function test_setFees_revertOnExceedMax() public {
+        vm.expectRevert(EidolonHook.FeeTooHigh.selector);
+        hook.setFees(5001, 1000);  // 50.01% exceeds max
+    }
+
+    /// @notice Test only owner can set fees
+    function test_setFees_onlyOwner() public {
+        vm.prank(provider);
+        vm.expectRevert(EidolonHook.NotOwner.selector);
+        hook.setFees(1500, 500);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
