@@ -16,7 +16,7 @@ remappings = [
     "@uniswap/v4-periphery/=lib/v4-periphery/",
     "permit2/=lib/permit2/",
     "forge-std/=lib/forge-std/src/",
-    "solmate/=lib/solmate/src/",
+    "solmate/=lib/solmate/",
 ]
 
 # Formatter settings
