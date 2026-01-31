@@ -73,6 +73,19 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @dev currency => accumulated fees
     mapping(Currency => uint256) public protocolFees;
 
+    /// @notice Bot kill count for the Exorcism leaderboard
+    /// @dev user => number of bots exorcised
+    mapping(address => uint256) public botKillCount;
+
+    /// @notice Tracks last block's swap info per pool for sandwich detection
+    /// @dev poolId => (blockNumber, swapCount, lastSender)
+    struct SwapContext {
+        uint256 blockNumber;
+        uint8 swapCount;
+        address lastSender;
+    }
+    mapping(bytes32 => SwapContext) private _swapContexts;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // CONSTRUCTOR
     // ═══════════════════════════════════════════════════════════════════════════
@@ -144,10 +157,42 @@ contract EidolonHook is BaseHook, IEidolonHook {
         ) = abi.decode(hookData, (GhostPermit, bytes, WitnessLib.WitnessData));
 
         // ═══════════════════════════════════════════════════════════════════════
-        // VALIDATION: Checks (CEI Pattern)
+        // THE EXORCISM: Anti-MEV Defense
         // ═══════════════════════════════════════════════════════════════════════
-
+        
         PoolId poolId = key.toId();
+        bytes32 poolIdBytes = PoolId.unwrap(poolId);
+        
+        // Check for sandwich attack patterns
+        SwapContext storage ctx = _swapContexts[poolIdBytes];
+        bool isSameBlock = ctx.blockNumber == block.number;
+        
+        if (isSameBlock) {
+            // Multiple swaps in same block - potential sandwich
+            ctx.swapCount++;
+            
+            // If this is the 3rd+ swap in a block AND sender differs from last,
+            // this looks like a sandwich (Bot -> Victim -> Bot pattern)
+            if (ctx.swapCount >= 3 && ctx.lastSender != sender) {
+                // Credit the permit provider with a bot kill
+                botKillCount[permit.provider]++;
+                
+                // Emit exorcism event
+                emit ExorcismTriggered(poolId, sender);
+                
+                // REFUSE TO MATERIALIZE - the bot's attack fails
+                revert MEVDetected();
+            }
+        } else {
+            // New block - reset context
+            ctx.blockNumber = block.number;
+            ctx.swapCount = 1;
+        }
+        ctx.lastSender = sender;
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // VALIDATION: Checks (CEI Pattern) - The Shield
+        // ═══════════════════════════════════════════════════════════════════════
 
         // 1. Check permit hasn't expired
         if (block.timestamp > permit.deadline) {

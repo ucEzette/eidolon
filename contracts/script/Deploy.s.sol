@@ -2,9 +2,9 @@
 pragma solidity ^0.8.26;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {HookMiner} from "v4-periphery/src/utils/HookMiner.sol";
-import {Hooks} from "v4-core/src/libraries/Hooks.sol";
-import {IPoolManager} from "v4-core/src/interfaces/IPoolManager.sol";
+import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {EidolonHook} from "../src/EidolonHook.sol";
 
 contract DeployEidolon is Script {
