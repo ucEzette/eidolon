@@ -1,0 +1,28 @@
+{
+    "name": "the-medium",
+    "version": "1.0.0",
+    "description": "Eidolon Protocol Off-chain Execution Bot",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "mev",
+        "flashbots",
+        "eidolon"
+    ],
+    "author": "",
+    "license": "ISC",
+    "dependencies": {
+        "dotenv": "^16.4.5",
+        "ethers": "^6.11.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20.12.7",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.4.5"
+    }
+}
