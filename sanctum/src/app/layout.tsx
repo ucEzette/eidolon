@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, JetBrains_Mono, Orbitron } from "next/font/google";
 import "./globals.css";
 import { Web3Provider } from "@/components/providers/Web3Provider";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -39,6 +40,7 @@ export default function RootLayout({
                     bg-background-dark min-h-screen text-white font-sans overflow-x-hidden`}
       >
         <Web3Provider>{children}</Web3Provider>
+        <Toaster position="bottom-right" theme="dark" />
       </body>
     </html>
   );
