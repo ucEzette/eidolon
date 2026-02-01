@@ -105,6 +105,7 @@ export function SummoningPortal() {
                     liquidityMode: liquidityMode,
                     nonce: result.nonce.toString()
                 });
+                // Fix Vercel build type error (forced update)
 
                 toast.success("Ghost Permit Summoned!", {
                     description: "Your liquidity authority has been signed.",
