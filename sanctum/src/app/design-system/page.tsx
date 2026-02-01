@@ -109,7 +109,7 @@ export default function DesignSystem() {
                             <h2 className="text-2xl font-bold text-primary border-b border-primary/20 pb-2">Token Selector</h2>
                             <div className="h-[800px] relative bg-black/20 rounded-3xl border border-white/5 overflow-hidden flex items-center justify-center">
                                 <div className="absolute inset-0 bg-black/50 z-0"></div>
-                                <TokenSelector onClose={() => { }} />
+                                <TokenSelector isOpen={true} onClose={() => { }} onSelect={() => { }} />
                             </div>
                         </section>
                     </div>

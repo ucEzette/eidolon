@@ -299,8 +299,22 @@ export function SummoningPortal() {
             <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent"></div>
 
             {/* Render Token Selector if open */}
-            {isTokenSelectorOpen && <TokenSelector onClose={() => setIsTokenSelectorOpen(false)} />}
-            {isSecondTokenSelectorOpen && <TokenSelector onClose={() => setIsSecondTokenSelectorOpen(false)} />}
+            <TokenSelector
+                isOpen={isTokenSelectorOpen}
+                onClose={() => setIsTokenSelectorOpen(false)}
+                onSelect={(token) => {
+                    // Handle selection
+                    setIsTokenSelectorOpen(false);
+                }}
+            />
+            <TokenSelector
+                isOpen={isSecondTokenSelectorOpen}
+                onClose={() => setIsSecondTokenSelectorOpen(false)}
+                onSelect={(token) => {
+                    // Handle selection
+                    setIsSecondTokenSelectorOpen(false);
+                }}
+            />
         </div>
     );
 }

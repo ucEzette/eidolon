@@ -2,6 +2,7 @@
 
 import { Navbar } from "@/components/sanctum/Navbar";
 import { MirrorDashboard } from "@/components/sanctum/MirrorDashboard";
+import { ActivityFeed } from "@/components/sanctum/ActivityFeed";
 
 // Force client-side rendering to avoid SSR issues with wagmi/viem
 export const dynamic = "force-dynamic";
@@ -16,8 +17,14 @@ export default function MirrorPage() {
             <Navbar />
 
             {/* Main Content */}
-            <div className="relative z-10 py-10">
-                <MirrorDashboard />
+            <div className="relative z-10 py-10 flex max-w-[1600px] mx-auto">
+                <div className="flex-1 min-w-0">
+                    <MirrorDashboard />
+                </div>
+                {/* Activity Feed Sidebar (Desktop) */}
+                <div className="hidden xl:block w-80 sticky top-24 h-[calc(100vh-8rem)] pr-6 pl-2">
+                    <ActivityFeed />
+                </div>
             </div>
         </main>
     );

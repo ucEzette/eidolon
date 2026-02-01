@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectWallet } from "@/components/wallet/ConnectWallet";
@@ -11,6 +12,8 @@ export function Navbar() {
     const { isConnected, chain } = useAccount();
 
     const isActive = (path: string) => pathname === path;
+
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     return (
         <nav className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-md">
@@ -26,34 +29,20 @@ export function Navbar() {
                             priority
                         />
                     </div>
-                    <h2 className="text-white text-2xl font-display font-bold tracking-widest uppercase drop-shadow-lg">EIDOLON</h2>
+                    <h2 className="text-white text-2xl font-display font-bold tracking-widest uppercase drop-shadow-lg hidden sm:block">EIDOLON</h2>
                 </Link>
 
                 {/* Desktop Nav */}
                 <div className="hidden md:flex items-center gap-1">
-                    <Link
-                        href="/"
-                        className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                    >
-                        Sanctum
-                    </Link>
-                    <Link
-                        href="/mirror"
-                        className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                    >
-                        Mirror
-                    </Link>
-                    <Link
-                        href="#"
-                        className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
-                    >
-                        Docs
-                    </Link>
+                    <Link href="/" className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
+                    <Link href="/mirror" className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
+                    <Link href="/analytics" className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/analytics') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>
+                    <Link href="/rewards" className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/rewards') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Rewards</Link>
+                    <Link href="#" className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">Docs</Link>
                 </div>
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-3">
-                    {/* Network Status */}
                     {isConnected && (
                         <div className="hidden sm:flex items-center gap-2 rounded-full border border-primary/20 bg-[#13131a] px-3 py-1.5 pr-4">
                             <div className="relative flex size-2.5">
@@ -63,11 +52,28 @@ export function Navbar() {
                             <span className="text-xs font-mono font-medium text-slate-300">{chain?.name || "Unknown Network"}</span>
                         </div>
                     )}
-
-                    {/* Connect Wallet */}
                     <ConnectWallet />
+
+                    {/* Mobile Menu Button */}
+                    <button
+                        className="md:hidden p-2 text-slate-400 hover:text-white"
+                        onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    >
+                        <span className="material-symbols-outlined text-2xl">{isMobileMenuOpen ? 'close' : 'menu'}</span>
+                    </button>
                 </div>
             </div>
-        </nav >
+
+            {/* Mobile Menu Overlay */}
+            {isMobileMenuOpen && (
+                <div className="md:hidden absolute top-20 left-0 w-full bg-[#0a0a0f] border-b border-white/10 py-4 px-6 flex flex-col gap-2 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-200">
+                    <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
+                    <Link href="/mirror" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
+                    <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/analytics') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>
+                    <Link href="/rewards" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/rewards') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Rewards</Link>
+                    <Link href="#" className="px-4 py-3 text-base font-medium text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">Docs</Link>
+                </div>
+            )}
+        </nav>
     );
 }
