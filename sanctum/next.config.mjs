@@ -25,8 +25,18 @@ const nextConfig = {
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
       };
     }
+
+    // Alias react-native dependencies to empty
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'react-native$': false,
+      'react-native-web$': false,
+      '@react-native-async-storage/async-storage$': false,
+    };
+
     return config;
   },
 };

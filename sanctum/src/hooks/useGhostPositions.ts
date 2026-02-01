@@ -10,7 +10,7 @@ export interface GhostPosition {
     amountA: string;
     amountB: string;
     expiry: number; // Timestamp
-    signature: SignedGhostPermit;
+    signature: string;
     status: 'Active' | 'Expired' | 'Revoked';
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
