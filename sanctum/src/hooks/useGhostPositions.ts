@@ -31,7 +31,17 @@ export function useGhostPositions() {
                 const res = await fetch('/api/relayer/orders');
                 const data = await res.json();
                 if (data.success) {
-                    setPositions(data.orders);
+                    setPositions(prev => {
+                        const serverOrders = data.orders as GhostPosition[];
+                        const serverIds = new Set(serverOrders.map(o => o.id));
+
+                        // Keep local items that are recent (created < 10s ago) and not yet in server
+                        // This handles the "Optimistic vs Slow Server" race
+                        const now = Date.now();
+                        const recentPending = prev.filter(p => !serverIds.has(p.id) && (now - p.timestamp < 10000));
+
+                        return [...recentPending, ...serverOrders];
+                    });
                 }
             } catch (e) {
                 console.error("Failed to sync with Relayer:", e);
@@ -60,11 +70,18 @@ export function useGhostPositions() {
 
         // Sync to Relayer
         try {
-            await fetch('/api/relayer/orders', {
+            console.log("Syncing to relayer...", newPosition);
+            const response = await fetch('/api/relayer/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ order: newPosition })
             });
+            const result = await response.json();
+            if (!result.success) {
+                console.error("Relayer rejected order:", result.error);
+            } else {
+                console.log("Relayer accepted order.");
+            }
         } catch (e) {
             console.error("Failed to push order to Relayer:", e);
             // Context: In a real app, rollback optimistic update or show error toast

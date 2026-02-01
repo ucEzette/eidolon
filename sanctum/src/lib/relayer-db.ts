@@ -23,7 +23,7 @@ export const RelayerDB = {
             const data = fs.readFileSync(DB_PATH, 'utf-8');
             return JSON.parse(data);
         } catch (e) {
-            console.error("RelayerDB Read Error:", e);
+            console.error("RelayerDB Read Error (DB_PATH: " + DB_PATH + "):", e);
             return [];
         }
     },
@@ -52,7 +52,13 @@ export const RelayerDB = {
             orders.push(order);
         }
 
-        fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2));
+        try {
+            fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2));
+            console.log("RelayerDB Saved Order:", order.id);
+        } catch (e) {
+            console.error("RelayerDB Write Error:", e);
+            throw e;
+        }
         return order;
     },
 

@@ -34,7 +34,6 @@ export function Navbar() {
                             priority
                         />
                     </div>
-                    <h2 className="text-white text-2xl font-display font-bold tracking-widest uppercase drop-shadow-lg hidden sm:block">EIDOLON</h2>
                 </Link>
 
                 {/* Desktop Nav */}
@@ -69,14 +68,19 @@ export function Navbar() {
                 </div>
             </div>
 
-            {/* Mobile Menu Overlay */}
             {isMobileMenuOpen && (
-                <div className="md:hidden absolute top-20 left-0 w-full bg-[#0a0a0f]/95 border-b border-white/10 py-4 px-6 flex flex-col gap-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-200">
-                    <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
-                    <Link href="/mirror" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
-                    <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/analytics') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>
-                    <Link href="/rewards" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/rewards') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Rewards</Link>
-                    <Link href="#" className="px-4 py-3 text-base font-medium text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5">Docs</Link>
+                <div className="md:hidden fixed inset-0 z-[100] bg-[#0a0a0f]/95 backdrop-blur-xl flex flex-col pt-24 px-6 gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                    <button
+                        className="absolute top-6 right-6 p-2 text-slate-400 hover:text-white"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                        <span className="material-symbols-outlined text-3xl">close</span>
+                    </button>
+
+                    <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
+                    <Link href="/mirror" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/mirror') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
+                    <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/analytics') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>
+                    <Link href="/rewards" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/rewards') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Rewards</Link>
                 </div>
             )}
         </nav>
