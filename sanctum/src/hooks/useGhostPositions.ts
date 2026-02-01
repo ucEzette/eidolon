@@ -22,19 +22,32 @@ const STORAGE_KEY = "eidolon_ghost_positions";
 
 export function useGhostPositions() {
     const [positions, setPositions] = useState<GhostPosition[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
+    // Initial Fetch & Polling
     useEffect(() => {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
+        const fetchOrders = async () => {
             try {
-                setPositions(JSON.parse(stored));
+                const res = await fetch('/api/relayer/orders');
+                const data = await res.json();
+                if (data.success) {
+                    setPositions(data.orders);
+                }
             } catch (e) {
-                console.error("Failed to parse ghost positions", e);
+                console.error("Failed to sync with Relayer:", e);
+            } finally {
+                setIsLoading(false);
             }
-        }
+        };
+
+        fetchOrders();
+
+        // Poll every 5 seconds for cross-device sync
+        const interval = setInterval(fetchOrders, 5000);
+        return () => clearInterval(interval);
     }, []);
 
-    const addPosition = (position: Omit<GhostPosition, 'id' | 'timestamp' | 'status'>) => {
+    const addPosition = async (position: Omit<GhostPosition, 'id' | 'timestamp' | 'status'>) => {
         const newPosition: GhostPosition = {
             ...position,
             id: crypto.randomUUID(),
@@ -42,32 +55,48 @@ export function useGhostPositions() {
             status: 'Active'
         };
 
-        const updated = [newPosition, ...positions];
-        setPositions(updated);
+        // Optimistic Update
+        setPositions(prev => [newPosition, ...prev]);
 
-        // Handle BigInt serialization
-        const serialized = JSON.stringify(updated, (key, value) =>
-            typeof value === 'bigint' ? value.toString() : value
-        );
-        localStorage.setItem(STORAGE_KEY, serialized);
+        // Sync to Relayer
+        try {
+            await fetch('/api/relayer/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: newPosition })
+            });
+        } catch (e) {
+            console.error("Failed to push order to Relayer:", e);
+            // Context: In a real app, rollback optimistic update or show error toast
+        }
     };
 
-    const revokePosition = (id: string, txHash?: string) => {
-        const updated = positions.map(p =>
+    const revokePosition = async (id: string, txHash?: string) => {
+        // Optimistic Update
+        const updatedStart = positions.map(p =>
             p.id === id ? { ...p, status: 'Revoked' as const, txHash } : p
         );
-        setPositions(updated);
+        setPositions(updatedStart);
 
-        // Handle BigInt serialization
-        const serialized = JSON.stringify(updated, (key, value) =>
-            typeof value === 'bigint' ? value.toString() : value
-        );
-        localStorage.setItem(STORAGE_KEY, serialized);
+        // Sync Update to Relayer (Re-saving with new status)
+        try {
+            const targetPos = updatedStart.find(p => p.id === id);
+            if (targetPos) {
+                await fetch('/api/relayer/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order: targetPos })
+                });
+            }
+        } catch (e) {
+            console.error("Failed to sync revocation to Relayer:", e);
+        }
     };
 
     return {
         positions,
         addPosition,
-        revokePosition
+        revokePosition,
+        isLoading
     };
 }
