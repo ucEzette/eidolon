@@ -1,26 +1,24 @@
-import { ethers } from "ethers";
-import { CONFIG } from "./config";
+
+import { CONFIG } from './config';
+import { Monitor } from './monitor';
 
 async function main() {
-    console.log("👻 The Medium is initializing...");
+    console.log("🔮 The Medium: Eidolon Off-Chain Bot Starting...");
+    console.log(`🔗 Network: ${CONFIG.RPC_URL}`);
+    console.log(`📜 Contract: ${CONFIG.CONTRACTS.EIDOLON_HOOK}`);
 
-    const provider = new ethers.JsonRpcProvider(CONFIG.RPC_URL);
+    const monitor = new Monitor();
 
-    try {
-        const network = await provider.getNetwork();
-        console.log(`Connected to network: ${network.name} (${network.chainId})`);
+    // Handle shutdown
+    process.on('SIGINT', async () => {
+        await monitor.stop();
+        process.exit(0);
+    });
 
-        if (CONFIG.PRIVATE_KEY) {
-            const wallet = new ethers.Wallet(CONFIG.PRIVATE_KEY, provider);
-            console.log(`Operator Address: ${wallet.address}`);
-            console.log("Waiting for Ghost Intents...");
-        } else {
-            console.log("Running in Read-Only Mode (No Private Key)");
-        }
-
-    } catch (error) {
-        console.error("Failed to connect to RPC:", error);
-    }
+    await monitor.start();
 }
 
-main().catch(console.error);
+main().catch((error) => {
+    console.error("Fatal Error:", error);
+    process.exit(1);
+});

@@ -17,8 +17,11 @@
     "author": "",
     "license": "ISC",
     "dependencies": {
+        "@flashbots/ethers-provider-bundle": "^1.0.0",
+        "axios": "^1.13.4",
         "dotenv": "^16.4.5",
-        "ethers": "^6.11.1"
+        "ethers": "^6.11.1",
+        "viem": "^2.45.1"
     },
     "devDependencies": {
         "@types/node": "^20.12.7",
