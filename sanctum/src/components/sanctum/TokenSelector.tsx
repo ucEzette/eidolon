@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from 'react';
+import { TOKENS } from '@/config/tokens';
+import { useAccount, useBalance } from 'wagmi';
 
 interface TokenSelectorProps {
     isOpen: boolean;
@@ -54,12 +56,13 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
 
                     {/* Token List */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar px-2 pb-4 space-y-1">
-                        <TokenRow symbol="ETH" name="Ethereum" amount="14.0532" value="$24,203.44" type="LAYER 1" />
-                        <TokenRow symbol="USDC" name="USD Coin" amount="2,400.00" value="$2,400.00" />
-                        <TokenRow symbol="ARB" name="Arbitrum" amount="5,230.50" value="$6,119.68" type="L2" />
-                        <TokenRow symbol="WBTC" name="Wrapped BTC" amount="0.0450" value="$2,340.12" />
-                        <TokenRow symbol="LINK" name="Chainlink" amount="0" value="$0.00" />
-                        <TokenRow symbol="SOL" name="Solana" amount="150.00" value="$12,450.00" />
+                        {TOKENS.map((token) => (
+                            <TokenRow
+                                key={token.symbol}
+                                token={token}
+                                onSelect={() => onSelect(token)}
+                            />
+                        ))}
                     </div>
 
                 </div>
@@ -82,25 +85,34 @@ function TrendingChip({ symbol, change, isPositive }: any) {
     )
 }
 
-function TokenRow({ symbol, name, amount, value, type }: any) {
+function TokenRow({ token, onSelect }: { token: any, onSelect: () => void }) {
+    const { address } = useAccount();
+    const { data: balance } = useBalance({
+        address: address,
+        token: token.address,
+    });
+
     return (
-        <div className="group relative flex cursor-pointer items-center justify-between rounded-xl p-4 transition-all duration-300 hover:bg-white/5 border border-transparent hover:border-white/10">
+        <div onClick={onSelect} className="group relative flex cursor-pointer items-center justify-between rounded-xl p-4 transition-all duration-300 hover:bg-white/5 border border-transparent hover:border-white/10">
             <div className="flex items-center gap-4">
                 <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center border border-white/10 group-hover:border-cyan-400/50 transition-colors shadow-lg">
                     {/* Placeholder Icon */}
-                    <span className="text-xs font-bold text-white/40">{symbol[0]}</span>
+                    <span className="text-xs font-bold text-white/40">{token.symbol[0]}</span>
                 </div>
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                        <span className="text-base font-bold text-white group-hover:text-cyan-200 transition-colors">{symbol}</span>
-                        {type && <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-white/60">{type}</span>}
+                        <span className="text-base font-bold text-white group-hover:text-cyan-200 transition-colors">{token.symbol}</span>
+                        {token.type && <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-white/60">{token.type}</span>}
                     </div>
-                    <span className="text-sm text-white/40 group-hover:text-white/60 transition-colors">{name}</span>
+                    <span className="text-sm text-white/40 group-hover:text-white/60 transition-colors">{token.name}</span>
                 </div>
             </div>
             <div className="flex flex-col items-end gap-0.5">
-                <span className="font-mono text-sm font-medium text-white group-hover:text-cyan-300 transition-colors">{amount}</span>
-                <span className="font-mono text-xs text-white/40 group-hover:text-white/60">{value}</span>
+                <span className="font-mono text-sm font-medium text-white group-hover:text-cyan-300 transition-colors">
+                    {balance ? parseFloat(balance.formatted).toFixed(4) : "0.0000"}
+                </span>
+                {/* Value placeholder until price feed is integrated */}
+                {/* <span className="font-mono text-xs text-white/40 group-hover:text-white/60">$0.00</span> */}
             </div>
         </div>
     )

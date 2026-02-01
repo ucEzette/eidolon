@@ -1,16 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { useGhostPermit } from "@/hooks/useGhostPermit";
 import { useEidolonHook } from "@/hooks/useEidolonHook";
-import { useAccount } from "wagmi";
+import { useAccount, useBalance } from "wagmi";
+import { TOKENS, TOKEN_MAP, type Token } from "@/config/tokens";
+import { parseUnits } from "viem";
+import { getPoolId } from "@/utils/uniswap";
+import { CONTRACTS } from "@/config/web3";
 
 type LiquidityMode = 'one-sided' | 'dual-sided';
 
 export function SummoningPortal() {
     const [isTokenSelectorOpen, setIsTokenSelectorOpen] = useState(false);
     const [isSecondTokenSelectorOpen, setIsSecondTokenSelectorOpen] = useState(false);
+
+    // State for selected tokens
+    const [tokenA, setTokenA] = useState<Token>(TOKEN_MAP["ETH"] || TOKENS[0]);
+    const [tokenB, setTokenB] = useState<Token>(TOKEN_MAP["USDC"] || TOKENS[1]);
+
     const [liquidityMode, setLiquidityMode] = useState<LiquidityMode>('one-sided');
     const [amount, setAmount] = useState<string>("5.0");
     const [validity, setValidity] = useState<number>(3); // Index 0-3
@@ -24,27 +33,45 @@ export function SummoningPortal() {
         ? (membership.isMember ? 0 : fees.dualSided)
         : (membership.isMember ? 0 : fees.singleSided);
 
+    // Fetch Balances
+    const { data: balanceA } = useBalance({
+        address: address,
+        token: tokenA.address === "0x0000000000000000000000000000000000000000" ? undefined : tokenA.address, // Handle native if needed, but our config uses addresses
+    });
+
+    const { data: balanceB } = useBalance({
+        address: address,
+        token: tokenB.address,
+    });
+
     const handleSign = async () => {
-        if (!isConnected) {
-            // Logic to open connect modal usually handled by RainbowKit/WalletConnect button
-            // utilizing ConnectButton or similar triggers
-            return;
-        }
+        if (!isConnected) return;
 
         // map validity slider index to minutes
         const validityMap = [60, 1440, 10080, 43200]; // 1h, 24h, 7d, 30d
         const minutes = validityMap[validity] || 10080;
 
-        // Dummy pool ID for demo (ETH/USDC)
-        const poolId = "0x0000000000000000000000000000000000000000000000000000000000000000";
-        const tokenAddress = "0x0000000000000000000000000000000000000000"; // ETH mock
+        // Calculate Pool ID properly (V4)
+        // Note: In a real scenario, we might query the factory to verify the pool exists
+        // V4 requires specifying the VALID fee tier. Here we mock use 3000 (0.3%) as a standard pool tier
+        // plus the hook address which makes the key unique.
+        const poolId = getPoolId(
+            tokenA.address,
+            tokenB.address,
+            3000, // Fee tier (0.3%)
+            60,   // Tick spacing
+            CONTRACTS.unichainSepolia.eidolonHook
+        );
+
+        console.log("Generated Pool Key ID:", poolId);
 
         const result = await signPermit(
-            tokenAddress,
+            tokenA.address,
             amount,
             poolId,
             liquidityMode === 'dual-sided',
-            minutes
+            minutes,
+            tokenA.decimals
         );
 
         if (result) {
@@ -144,7 +171,11 @@ export function SummoningPortal() {
                             <label className="text-sm font-medium text-white/80">
                                 {liquidityMode === 'dual-sided' ? 'First Asset' : 'Asset Amount'}
                             </label>
-                            {/* Balance removed */}
+
+                            {/* Real Balance Display */}
+                            <span className="text-xs font-mono text-text-muted">
+                                Balance: {balanceA ? parseFloat(balanceA.formatted).toFixed(4) : "0.00"} {tokenA.symbol}
+                            </span>
                         </div>
                         <div className="relative flex items-center bg-black border border-white/10 hover:border-white/20 focus-within:border-phantom-cyan focus-within:shadow-[0_0_10px_-2px_rgba(165,243,252,0.3)] transition-all duration-300">
                             {/* Input */}
@@ -162,17 +193,13 @@ export function SummoningPortal() {
                                     className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white pl-2 pr-3 py-1.5 border border-white/10 transition-colors"
                                 >
                                     <div className="size-6 rounded-none bg-white/10 flex items-center justify-center overflow-hidden">
-                                        <img alt="Ethereum logo" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCwND7wf2eTPp9JWfuDxhsMogxcpN-WI4C7CVmUkEIzesRJiwQLsOkTk6iDEK07NKRtEW9Qhx7EtR59x0BcyFsxwoXja9s0anHvC5EBn9s0yIaILG-5_EY-q5BOisYirItOYAmAR4J73ZmvpGxJRLnc9GWmarPt7Td0qPeIkaWGaRHEiZqwTlVjxOYjZzDO_PMBR12zUUkvyBLc4FpoIzMjBWTHpXcWrKWWMxymMQNgIOSEMSyf6fc36rp9ImnGcgetDkicnpKLeu0" />
+                                        <span className="text-xs font-bold text-white/80">{tokenA.symbol[0]}</span>
                                     </div>
-                                    <span className="font-bold text-sm font-mono">ETH</span>
+                                    <span className="font-bold text-sm font-mono">{tokenA.symbol}</span>
                                     <span className="material-symbols-outlined text-lg text-white/50">expand_more</span>
                                 </button>
                             </div>
                         </div>
-                        {/* USD Value */}
-                        {/* <div className="mt-2 px-1 flex justify-end">
-                            <p className="text-text-muted text-xs font-mono">≈ $12,482.35 USD</p>
-                        </div> */}
                     </div>
 
                     {/* Second Token Input - Only shown for Dual-Sided */}
@@ -185,7 +212,10 @@ export function SummoningPortal() {
 
                             <div className="flex justify-between items-center mb-2 px-1">
                                 <label className="text-sm font-medium text-white/80">Second Asset</label>
-                                {/* Balance removed */}
+                                {/* Real Balance for Token B */}
+                                <span className="text-xs font-mono text-text-muted">
+                                    Balance: {balanceB ? parseFloat(balanceB.formatted).toFixed(4) : "0.00"} {tokenB.symbol}
+                                </span>
                             </div>
                             <div className="relative flex items-center bg-surface-dark border border-purple-500/30 hover:border-purple-500/50 focus-within:border-purple-500/80 focus-within:shadow-[0_0_15px_-5px_#a855f7] rounded-xl transition-all duration-300">
                                 {/* Input */}
@@ -193,7 +223,7 @@ export function SummoningPortal() {
                                     className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-3xl font-medium placeholder-white/20 p-5 pr-32 caret-purple-400"
                                     placeholder="0.00"
                                     type="text"
-                                    defaultValue="12,500"
+                                    defaultValue="12,500" // Demo visual value
                                 />
                                 {/* Token Selector Pill */}
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -204,15 +234,11 @@ export function SummoningPortal() {
                                         <div className="size-6 rounded-full bg-white/10 flex items-center justify-center overflow-hidden">
                                             <span className="text-xs font-bold text-green-400">$</span>
                                         </div>
-                                        <span className="font-bold text-sm">USDC</span>
+                                        <span className="font-bold text-sm">{tokenB.symbol}</span>
                                         <span className="material-symbols-outlined text-lg text-white/50">expand_more</span>
                                     </button>
                                 </div>
                             </div>
-                            {/* USD Value */}
-                            {/* <div className="mt-2 px-1 flex justify-end">
-                                <p className="text-text-muted text-xs font-mono">≈ $12,500.00 USD</p>
-                            </div> */}
                         </div>
                     )}
 
@@ -303,7 +329,7 @@ export function SummoningPortal() {
                 isOpen={isTokenSelectorOpen}
                 onClose={() => setIsTokenSelectorOpen(false)}
                 onSelect={(token) => {
-                    // Handle selection
+                    setTokenA(token);
                     setIsTokenSelectorOpen(false);
                 }}
             />
@@ -311,7 +337,7 @@ export function SummoningPortal() {
                 isOpen={isSecondTokenSelectorOpen}
                 onClose={() => setIsSecondTokenSelectorOpen(false)}
                 onSelect={(token) => {
-                    // Handle selection
+                    setTokenB(token);
                     setIsSecondTokenSelectorOpen(false);
                 }}
             />

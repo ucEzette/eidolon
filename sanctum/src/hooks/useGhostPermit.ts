@@ -54,7 +54,8 @@ export function useGhostPermit() {
         amount: string,
         poolId: `0x${string}`,
         isDualSided: boolean,
-        validityMinutes: number = 30
+        validityMinutes: number = 30,
+        decimals: number = 18 // Default to 18 if not provided
     ): Promise<SignedGhostPermit | null> => {
         if (!address) {
             setError("Wallet not connected");
@@ -72,8 +73,8 @@ export function useGhostPermit() {
                 Math.floor(Date.now() / 1000) + validityMinutes * 60
             );
 
-            // Parse amount (assuming 18 decimals)
-            const parsedAmount = parseUnits(amount, 18);
+            // Parse amount with correct decimals
+            const parsedAmount = parseUnits(amount, decimals);
 
             // Get correct contract addresses
             const contracts = CONTRACTS.unichainSepolia;
