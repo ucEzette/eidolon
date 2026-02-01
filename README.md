@@ -82,6 +82,30 @@ cd contracts
 forge coverage
 ```
 
+### The Sanctum (Frontend + Relayer)
+
+The interface for summoning Ghost Permits.
+
+```bash
+cd sanctum
+npm install
+# Configure .env.local with RPC_URL and NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID
+npm run dev
+# App: http://localhost:3000
+# Relayer API: http://localhost:3000/api/relayer/orders
+```
+
+### The Medium (Bot)
+
+The off-chain agent that exorcises (executes) the permits.
+
+```bash
+cd medium
+npm install
+# Configure .env with PRIVATE_KEY and RPC_URL
+npm run dev
+```
+
 ## 🔐 Security Model
 
 EIDOLON uses **Permit2 with Witness Data** for cryptographic binding:

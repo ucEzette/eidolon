@@ -15,6 +15,8 @@ export interface GhostPosition {
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
     nonce: string; // Storing as string to avoid serialization issues
+    provider: string; // Address of the signer
+    poolId: string; // Pool ID
     txHash?: string;
 }
 

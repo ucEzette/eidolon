@@ -111,7 +111,9 @@ export function SummoningPortal() {
                     expiry: Date.now() + (minutes * 60 * 1000),
                     signature: result.signature,
                     liquidityMode: liquidityMode,
-                    nonce: result.nonce.toString()
+                    nonce: result.nonce.toString(),
+                    provider: address!, // Address is confirmed by isConnected common check
+                    poolId: poolId
                 });
                 // Fix Vercel build type error (forced update)
 
