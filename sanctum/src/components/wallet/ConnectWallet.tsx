@@ -191,14 +191,14 @@ export function ConnectWallet() {
       <button
         onClick={() => setShowMethods(!showMethods)}
         disabled={isLoading}
-        className="px-6 py-3 rounded-none border border-phantom-cyan/50
+        className="px-4 py-2 md:px-6 md:py-3 rounded-none border border-phantom-cyan/50
                    bg-phantom-cyan hover:bg-phantom-cyan/90
                    disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500
                    text-black font-bold tracking-wide uppercase
                    shadow-[4px_4px_0px_rgba(255,255,255,0.1)]
                    hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[3px_3px_0px_rgba(255,255,255,0.1)]
                    active:translate-x-[4px] active:translate-y-[4px] active:shadow-none
-                   transition-all duration-100"
+                   transition-all duration-100 text-xs md:text-base"
       >
         <span className="flex items-center gap-2">
           {isLoading ? (
@@ -226,7 +226,8 @@ export function ConnectWallet() {
                 <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
                 <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
               </svg>
-              Enter The Sanctum
+              <span className="hidden md:inline">Enter The Sanctum</span>
+              <span className="md:hidden">Connect</span>
             </>
           )}
         </span>

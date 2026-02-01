@@ -83,7 +83,7 @@ export function MirrorDashboard() {
     const feeTier = membership.isMember ? "0%" : `${fees.dualSided}%`;
 
     return (
-        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 md:px-6 lg:px-8">
             <TokenSelector
                 isOpen={showTokenSelector}
                 onClose={() => setShowTokenSelector(false)}
@@ -185,7 +185,7 @@ export function MirrorDashboard() {
 
             {/* Active Positions Table */}
             <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between px-1">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between px-1 gap-4 md:gap-0">
                     <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                         <span className="material-symbols-outlined text-primary">view_list</span>
                         Active Mirror Positions

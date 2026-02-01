@@ -4,7 +4,7 @@ import React from 'react';
 
 export function DeepAnalyticsHub() {
     return (
-        <div className="max-w-[1440px] mx-auto p-6 md:p-8 lg:p-12 space-y-6 animate-in fade-in zoom-in-95 duration-500">
+        <div className="max-w-[1440px] mx-auto p-4 md:p-8 lg:p-12 space-y-6 animate-in fade-in zoom-in-95 duration-500">
 
             {/* Breadcrumbs */}
             <nav className="flex flex-wrap items-center gap-2 text-sm md:text-base mb-2">

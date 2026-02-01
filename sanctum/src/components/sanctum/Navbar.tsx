@@ -71,7 +71,7 @@ export function Navbar() {
 
             {/* Mobile Menu Overlay */}
             {isMobileMenuOpen && (
-                <div className="md:hidden absolute top-20 left-0 w-full bg-[#0a0a0f] border-b border-white/10 py-4 px-6 flex flex-col gap-2 shadow-2xl animate-in fade-in slide-in-from-top-4 duration-200">
+                <div className="md:hidden absolute top-20 left-0 w-full bg-[#0a0a0f]/95 border-b border-white/10 py-4 px-6 flex flex-col gap-2 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-200">
                     <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
                     <Link href="/mirror" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
                     <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-3 text-base font-medium transition-colors rounded-lg ${isActive('/analytics') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>

@@ -21,7 +21,7 @@ export function RewardsPortal() {
     // History is now fetched from blockchain via useActivityHistory
 
     return (
-        <div className="max-w-[1440px] mx-auto p-6 md:p-8 lg:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-full">
+        <div className="max-w-[1440px] mx-auto p-4 md:p-8 lg:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-full">
 
             {/* Hero: Global Multiplier Card */}
             <div className="relative overflow-hidden rounded-2xl border border-cyan-500/30 bg-[#02040a] p-6 md:p-8 shadow-[0_0_25px_-5px_rgba(6,182,212,0.15)] group">
