@@ -281,7 +281,9 @@ export function ConnectWallet() {
                 <div className="size-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 
                               flex items-center justify-center group-hover:scale-110 transition-transform">
                   {/* Dynamic Icon based on connector name */}
-                  {connector.name.toLowerCase().includes('metamask') ? (
+                  {connector.name.toLowerCase().includes('rabby') ? (
+                    <img src="https://rabby.io/assets/rabby-logo.png" alt="Rabby" className="w-5 h-5 object-contain" />
+                  ) : connector.name.toLowerCase().includes('metamask') ? (
                     <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask" className="w-5 h-5" />
                   ) : connector.name.toLowerCase().includes('coinbase') ? (
                     <div className="w-5 h-5 rounded-full bg-[#0052FF] flex items-center justify-center text-white text-[10px] font-bold">C</div>

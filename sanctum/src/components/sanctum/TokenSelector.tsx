@@ -92,12 +92,45 @@ function TokenRow({ token, onSelect }: { token: any, onSelect: () => void }) {
         token: token.address,
     });
 
+    const addToWallet = async (e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent selection when clicking add
+        if (typeof window !== 'undefined' && (window as any).ethereum) {
+            try {
+                await (window as any).ethereum.request({
+                    method: 'wallet_watchAsset',
+                    params: {
+                        type: 'ERC20',
+                        options: {
+                            address: token.address,
+                            symbol: token.symbol,
+                            decimals: token.decimals,
+                            image: token.logo,
+                        },
+                    },
+                });
+            } catch (error) {
+                console.error("Failed to add token to wallet:", error);
+            }
+        }
+    };
+
     return (
         <div onClick={onSelect} className="group relative flex cursor-pointer items-center justify-between rounded-xl p-4 transition-all duration-300 hover:bg-white/5 border border-transparent hover:border-white/10">
             <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center border border-white/10 group-hover:border-cyan-400/50 transition-colors shadow-lg">
+                <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center border border-white/10 group-hover:border-cyan-400/50 transition-colors shadow-lg relative">
                     {/* Placeholder Icon */}
                     <span className="text-xs font-bold text-white/40">{token.symbol[0]}</span>
+
+                    {/* Add to Wallet Button (visible on hover) */}
+                    {!token.isNative && (
+                        <button
+                            onClick={addToWallet}
+                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white/10 hover:bg-cyan-400 border border-black/50 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 hover:scale-110"
+                            title="Add to Wallet"
+                        >
+                            <span className="material-symbols-outlined text-[10px] text-white">add</span>
+                        </button>
+                    )}
                 </div>
                 <div className="flex flex-col">
                     <div className="flex items-center gap-2">
@@ -111,8 +144,6 @@ function TokenRow({ token, onSelect }: { token: any, onSelect: () => void }) {
                 <span className="font-mono text-sm font-medium text-white group-hover:text-cyan-300 transition-colors">
                     {balance ? parseFloat(balance.formatted).toFixed(4) : "0.0000"}
                 </span>
-                {/* Value placeholder until price feed is integrated */}
-                {/* <span className="font-mono text-xs text-white/40 group-hover:text-white/60">$0.00</span> */}
             </div>
         </div>
     )
