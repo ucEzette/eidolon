@@ -4,6 +4,7 @@ import { useAccount, useSignTypedData } from "wagmi";
 import { parseUnits, type Address } from "viem";
 import { CONTRACTS, PERMIT2_DOMAIN } from "@/config/web3";
 import { useState } from "react";
+import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // EIP-712 TYPE DEFINITIONS (Updated with isDualSided)
@@ -45,9 +46,13 @@ export interface SignedGhostPermit {
 }
 
 export function useGhostPermit() {
-    const { address, chain } = useAccount();
-    const { signTypedDataAsync, isPending } = useSignTypedData();
+    const { address: wagmiAddress, chain } = useAccount();
+    const { signTypedDataAsync, isPending: isWagmiPending } = useSignTypedData();
+    const { isConnected: isCircleConnected, address: circleAddress, signTypedData: signTypedDataCircle, isConnecting: isCirclePending } = useCircleWallet();
     const [error, setError] = useState<string | null>(null);
+
+    const isPending = isWagmiPending || isCirclePending;
+    const address = isCircleConnected ? circleAddress : wagmiAddress;
 
     const signPermit = async (
         token: Address,
@@ -90,26 +95,48 @@ export function useGhostPermit() {
                 isDualSided: isDualSided,
             };
 
-            // Sign using EIP-712
-            const signature = await signTypedDataAsync({
-                domain: {
-                    name: PERMIT2_DOMAIN.name,
-                    chainId: chain?.id || 1301,
-                    verifyingContract: contracts.permit2,
+            const domain = {
+                name: PERMIT2_DOMAIN.name,
+                chainId: chain?.id || 1301,
+                verifyingContract: contracts.permit2,
+            };
+
+            const types = PERMIT_WITNESS_TRANSFER_FROM_TYPES;
+
+            const message = {
+                permitted: {
+                    token: token,
+                    amount: parsedAmount,
                 },
-                types: PERMIT_WITNESS_TRANSFER_FROM_TYPES,
-                primaryType: "PermitWitnessTransferFrom",
-                message: {
-                    permitted: {
-                        token: token,
-                        amount: parsedAmount,
-                    },
-                    spender: contracts.eidolonHook,
-                    nonce: nonce,
-                    deadline: deadline,
-                    witness: witness,
-                },
-            });
+                spender: contracts.eidolonHook,
+                nonce: nonce,
+                deadline: deadline,
+                witness: witness,
+            };
+
+            let signature: `0x${string}`;
+
+            if (isCircleConnected) {
+                console.log("Signing with Circle Passkey Wallet...");
+                // Circle expects the standard object structure
+                const sig = await signTypedDataCircle({
+                    domain,
+                    types,
+                    primaryType: "PermitWitnessTransferFrom",
+                    message
+                });
+
+                if (!sig) throw new Error("Failed to sign with Passkey");
+                signature = sig as `0x${string}`;
+            } else {
+                // Sign using Wagmi (EIP-712)
+                signature = await signTypedDataAsync({
+                    domain,
+                    types,
+                    primaryType: "PermitWitnessTransferFrom",
+                    message,
+                });
+            }
 
             return {
                 token,

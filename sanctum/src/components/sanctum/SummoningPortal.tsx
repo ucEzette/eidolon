@@ -12,6 +12,7 @@ import { CONTRACTS } from "@/config/web3";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
+import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
 
 type LiquidityMode = 'one-sided' | 'dual-sided';
 
@@ -29,24 +30,31 @@ export function SummoningPortal() {
     const [validity, setValidity] = useState<number>(3); // Index 0-3
 
     // Hooks
-    const { signPermit, isPending, error: signError } = useGhostPermit();
+    const { signPermit, isPending: isSignPending, error: signError } = useGhostPermit();
     const { addPosition } = useGhostPositions();
     const { fees, membership } = useEidolonHook();
-    const { address, isConnected } = useAccount();
+
+    // Wallet Connection - Unified
+    const { address: wagmiAddress, isConnected: isWagmiConnected } = useAccount();
+    const { address: circleAddress, isConnected: isCircleConnected } = useCircleWallet();
+
+    const isConnected = isWagmiConnected || isCircleConnected;
+    const address = isCircleConnected ? circleAddress : wagmiAddress;
+
     const router = useRouter();
 
     const currentFee = liquidityMode === 'dual-sided'
         ? (membership.isMember ? 0 : fees.dualSided)
         : (membership.isMember ? 0 : fees.singleSided);
 
-    // Fetch Balances
+    // Fetch Balances using Unified Address
     const { data: balanceA, error: errorA } = useBalance({
-        address: address,
+        address: address || undefined,
         token: tokenA.isNative ? undefined : tokenA.address,
     });
 
     const { data: balanceB, error: errorB } = useBalance({
-        address: address,
+        address: address || undefined,
         token: tokenB.isNative ? undefined : tokenB.address,
     });
 
@@ -340,14 +348,14 @@ export function SummoningPortal() {
                     {/* Action Button */}
                     <button
                         onClick={handleSign}
-                        disabled={isPending}
+                        disabled={isSignPending}
                         className={`relative w-full group overflow-hidden transition-all duration-100 h-14
                             ${!isConnected
                                 ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50'
                                 : 'bg-phantom-cyan hover:bg-phantom-cyan/90 text-black shadow-[4px_4px_0px_#fff4] hover:shadow-[2px_2px_0px_#fff4] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'}`}
                     >
                         <div className="flex items-center justify-center gap-2">
-                            {isPending ? (
+                            {isSignPending ? (
                                 <span className="material-symbols-outlined animate-spin">refresh</span>
                             ) : (
                                 <span className="material-symbols-outlined">
@@ -355,7 +363,7 @@ export function SummoningPortal() {
                                 </span>
                             )}
                             <span className="text-base font-bold tracking-widest uppercase">
-                                {isPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
+                                {isSignPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
                             </span>
                         </div>
                     </button>
