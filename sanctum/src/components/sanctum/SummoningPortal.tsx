@@ -9,6 +9,9 @@ import { TOKENS, TOKEN_MAP, type Token } from "@/config/tokens";
 import { parseUnits } from "viem";
 import { getPoolId } from "@/utils/uniswap";
 import { CONTRACTS } from "@/config/web3";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { useGhostPositions } from "@/hooks/useGhostPositions";
 
 type LiquidityMode = 'one-sided' | 'dual-sided';
 
@@ -18,7 +21,7 @@ export function SummoningPortal() {
 
     // State for selected tokens
     const [tokenA, setTokenA] = useState<Token>(TOKEN_MAP["ETH"] || TOKENS[0]);
-    const [tokenB, setTokenB] = useState<Token>(TOKEN_MAP["USDC"] || TOKENS[1]);
+    const [tokenB, setTokenB] = useState<Token>(TOKEN_MAP["USDC"] || TOKENS[2]); // Default to USDC if index shifted
 
     const [liquidityMode, setLiquidityMode] = useState<LiquidityMode>('one-sided');
     const [amount, setAmount] = useState<string>("5.0");
@@ -26,23 +29,31 @@ export function SummoningPortal() {
 
     // Hooks
     const { signPermit, isPending, error: signError } = useGhostPermit();
+    const { addPosition } = useGhostPositions();
     const { fees, membership } = useEidolonHook();
     const { address, isConnected } = useAccount();
+    const router = useRouter();
 
     const currentFee = liquidityMode === 'dual-sided'
         ? (membership.isMember ? 0 : fees.dualSided)
         : (membership.isMember ? 0 : fees.singleSided);
 
     // Fetch Balances
-    const { data: balanceA } = useBalance({
+    const { data: balanceA, error: errorA } = useBalance({
         address: address,
-        token: tokenA.address === "0x0000000000000000000000000000000000000000" ? undefined : tokenA.address, // Handle native if needed, but our config uses addresses
+        token: tokenA.isNative ? undefined : tokenA.address,
     });
 
-    const { data: balanceB } = useBalance({
+    const { data: balanceB, error: errorB } = useBalance({
         address: address,
-        token: tokenB.address,
+        token: tokenB.isNative ? undefined : tokenB.address,
     });
+
+    // Debug Logs
+    useEffect(() => {
+        console.log("Token A:", tokenA, "Native:", tokenA.isNative, "Balance:", balanceA?.formatted, "Error:", errorA);
+        console.log("Token B:", tokenB, "Native:", tokenB.isNative, "Balance:", balanceB?.formatted, "Error:", errorB);
+    }, [tokenA, tokenB, balanceA, balanceB, errorA, errorB, liquidityMode]);
 
     const handleSign = async () => {
         if (!isConnected) return;
@@ -51,13 +62,17 @@ export function SummoningPortal() {
         const validityMap = [60, 1440, 10080, 43200]; // 1h, 24h, 7d, 30d
         const minutes = validityMap[validity] || 10080;
 
+        // Use Native ETH address directly as requested
+        const signingTokenA = tokenA.address;
+        const signingTokenB = tokenB.address;
+
         // Calculate Pool ID properly (V4)
         // Note: In a real scenario, we might query the factory to verify the pool exists
         // V4 requires specifying the VALID fee tier. Here we mock use 3000 (0.3%) as a standard pool tier
         // plus the hook address which makes the key unique.
         const poolId = getPoolId(
-            tokenA.address,
-            tokenB.address,
+            signingTokenA,
+            signingTokenB,
             3000, // Fee tier (0.3%)
             60,   // Tick spacing
             CONTRACTS.unichainSepolia.eidolonHook
@@ -65,18 +80,39 @@ export function SummoningPortal() {
 
         console.log("Generated Pool Key ID:", poolId);
 
-        const result = await signPermit(
-            tokenA.address,
-            amount,
-            poolId,
-            liquidityMode === 'dual-sided',
-            minutes,
-            tokenA.decimals
-        );
+        try {
+            const result = await signPermit(
+                signingTokenA,
+                amount,
+                poolId,
+                liquidityMode === 'dual-sided',
+                minutes,
+                tokenA.decimals
+            );
 
-        if (result) {
-            console.log("Permit Signed:", result);
-            // Handle success (e.g. show toast, redirect to dashboard)
+            if (result) {
+                console.log("Permit Signed:", result);
+
+                // Save permit to local "Ghost State"
+                addPosition({
+                    tokenA: tokenA.symbol,
+                    tokenB: tokenB.symbol,
+                    amountA: amount,
+                    amountB: "0", // Currently one-sided logic dominates
+                    expiry: Date.now() + (minutes * 60 * 1000),
+                    signature: result
+                });
+
+                toast.success("Ghost Permit Summoned!", {
+                    description: "Your liquidity authority has been signed.",
+                });
+
+                // Redirect to Dashboard to see the "Pending" permit
+                router.push("/mirror");
+            }
+        } catch (err: any) {
+            console.error(err);
+            toast.error(err.message || "Failed to summon permit");
         }
     };
 

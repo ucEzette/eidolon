@@ -5,15 +5,24 @@ export interface Token {
     decimals: number;
     logo?: string;
     type?: string;
+    isNative?: boolean;
 }
 
 export const TOKENS: Token[] = [
     {
-        symbol: "ETH", // Using ETH symbol but mapping to WETH for permits
+        symbol: "ETH",
         name: "Ether",
+        address: "0x0000000000000000000000000000000000000000", // Native address convention
+        decimals: 18,
+        type: "LAYER 1",
+        isNative: true
+    },
+    {
+        symbol: "WETH",
+        name: "Wrapped Ether",
         address: "0x4200000000000000000000000000000000000006",
         decimals: 18,
-        type: "LAYER 1"
+        type: "WRAP"
     },
     {
         symbol: "USDC",

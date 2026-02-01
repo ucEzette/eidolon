@@ -4,11 +4,13 @@ import { useState } from "react";
 import { useEidolonHook } from "@/hooks/useEidolonHook";
 import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
+import { useGhostPositions } from "@/hooks/useGhostPositions";
 
 export function MirrorDashboard() {
     const [showRevokeModal, setShowRevokeModal] = useState(false);
     const [showTokenSelector, setShowTokenSelector] = useState(false);
     const { fees, membership } = useEidolonHook();
+    const { positions } = useGhostPositions();
 
     // For demo purposes, we'll calculate rewards based on membership status
     // In a real app, this would query the contract or an indexer for actual earnings
@@ -164,7 +166,7 @@ export function MirrorDashboard() {
                                         <div className="flex items-center gap-1.5 justify-end">
                                             Status
                                             <div className="relative group/info">
-                                                <span className="material-symbols-outlined text-[12px] text-slate-600 group-hover/info:text-phantom-cyan cursor-help">info</span>
+                                                <span className="material-symbols-outlined text--[12px] text-slate-600 group-hover/info:text-phantom-cyan cursor-help">info</span>
                                                 <div className="absolute right-0 top-5 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
                                                     <div className="space-y-2 text-xs font-mono">
                                                         <div><span className="text-emerald-400 font-bold">Active</span><span className="text-white/60"> - Ready</span></div>
@@ -179,100 +181,74 @@ export function MirrorDashboard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 text-sm">
-                                {/* Row 1 */}
-                                <tr className="group hover:bg-white/[0.02] transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex -space-x-2">
-                                                <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">ETH</div>
-                                                <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">USDC</div>
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-white">ETH-USDC</div>
-                                                <div className="text-xs text-slate-500">Uniswap V3</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 font-mono text-slate-300">
-                                        5.20 <span className="text-xs text-slate-500">ETH</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 font-mono text-emerald-400">
-                                            <span className="material-symbols-outlined text-base">timer</span>
-                                            14h 22m 10s
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 font-mono text-primary font-bold">12.4%</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                            </span>
-                                            Active
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button
-                                            onClick={() => setShowRevokeModal(true)}
-                                            className="text-slate-400 hover:text-white transition-colors"
-                                        >
-                                            <span className="material-symbols-outlined">more_vert</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                                {/* Row 2 */}
-                                <tr className="group hover:bg-white/[0.02] transition-colors">
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex -space-x-2">
-                                                <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-orange-500 to-yellow-500">WBTC</div>
-                                                <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-yellow-400 to-orange-300">DAI</div>
-                                            </div>
-                                            <div>
-                                                <div className="font-bold text-white">WBTC-DAI</div>
-                                                <div className="text-xs text-slate-500">Curve</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 font-mono text-slate-300">
-                                        0.50 <span className="text-xs text-slate-500">WBTC</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2 font-mono text-amber-400">
-                                            <span className="material-symbols-outlined text-base">timer</span>
-                                            02h 11m 45s
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4 font-mono text-primary font-bold">8.1%</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 border border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                                            <span className="relative flex h-2 w-2">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                            </span>
-                                            Expiring Soon
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button className="text-slate-400 hover:text-white transition-colors">
-                                            <span className="material-symbols-outlined">more_vert</span>
-                                        </button>
-                                    </td>
-                                </tr>
+                                {positions.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-mono">
+                                            No active Ghost Permits found. Summon one to begin.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    positions.map((pos) => {
+                                        const now = Date.now();
+                                        const timeLeft = Math.max(0, pos.expiry - now);
+                                        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                                        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                                        const isExpired = timeLeft <= 0;
+                                        const isExpiringSoon = timeLeft < 3 * 60 * 60 * 1000 && !isExpired;
+
+                                        return (
+                                            <tr key={pos.id} className="group hover:bg-white/[0.02] transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex -space-x-2">
+                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA}</div>
+                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-white">{pos.tokenA}-{pos.tokenB}</div>
+                                                            <div className="text-xs text-slate-500">Unichain Sepolia</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-slate-300">
+                                                    {pos.amountA} <span className="text-xs text-slate-500">{pos.tokenA}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className={`flex items-center gap-2 font-mono ${isExpired ? 'text-red-400' : (isExpiringSoon ? 'text-amber-400' : 'text-emerald-400')}`}>
+                                                        <span className="material-symbols-outlined text-base">timer</span>
+                                                        {isExpired ? "Expired" : `${hours}h ${minutes}m`}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 font-mono text-primary font-bold">12.4%</td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border shadow-[0_0_10px_rgba(16,185,129,0.2)]
+                                                        ${isExpired ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                                                        {!isExpired && (
+                                                            <span className="relative flex h-2 w-2">
+                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                                            </span>
+                                                        )}
+                                                        {isExpired ? "Expired" : "Active"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button
+                                                        onClick={() => {
+                                                            // In a real app, this would set the selected position for revocation logic
+                                                            setShowRevokeModal(true)
+                                                        }}
+                                                        className="text-slate-400 hover:text-white transition-colors"
+                                                    >
+                                                        <span className="material-symbols-outlined">more_vert</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
                             </tbody>
                         </table>
-                    </div>
-                    <div className="border-t border-white/5 bg-white/[0.02] px-6 py-3 flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Showing 1-3 of 12 positions</span>
-                        <div className="flex gap-1">
-                            <button disabled className="p-1 rounded hover:bg-white/10 text-slate-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                <span className="material-symbols-outlined text-sm">chevron_left</span>
-                            </button>
-                            <button className="p-1 rounded hover:bg-white/10 text-slate-400 transition-colors">
-                                <span className="material-symbols-outlined text-sm">chevron_right</span>
-                            </button>
-                        </div>
                     </div>
                 </div>
             </div>

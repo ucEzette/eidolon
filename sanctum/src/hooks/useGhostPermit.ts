@@ -125,8 +125,10 @@ export function useGhostPermit() {
 
         } catch (err: any) {
             console.error("Error signing permit:", err);
-            setError(err.message || "Failed to sign permit");
-            return null;
+            // Return raw error message for better debugging
+            const errorMessage = err?.cause?.message || err?.shortMessage || err.message || "Failed to sign permit";
+            setError(errorMessage);
+            throw new Error(errorMessage); // Throw so SummoningPortal catches it
         }
     };
 
