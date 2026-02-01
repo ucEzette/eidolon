@@ -55,6 +55,9 @@ export function CircleWalletProvider({ children }: CircleWalletProviderProps) {
                     case 421614: return "arbitrumSepolia";
                     case 84532: return "baseSepolia";
                     case 11155111: return "sepolia";
+                    case 1301: return "unichainSepolia";
+                    case 11155420: return "optimismSepolia";
+                    case 43113: return "avalancheFuji";
                     default: return chain.name.toLowerCase().replace(/\s+/g, "");
                 }
             };

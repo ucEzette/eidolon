@@ -13,16 +13,19 @@ import { polygonAmoy, baseSepolia, arbitrumSepolia, sepolia } from "viem/chains"
 export const CIRCLE_CLIENT_URL = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL || "https://modular-sdk.circle.com";
 export const CIRCLE_CLIENT_KEY = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY || "";
 
+import { unichainSepolia as unichainConfig } from "@/config/web3";
+
 // Supported chains for Circle Smart Accounts
 export const CIRCLE_SUPPORTED_CHAINS = {
     polygonAmoy,
     baseSepolia,
     arbitrumSepolia,
     sepolia,
+    unichainSepolia: unichainConfig,
 } as const;
 
 // Default chain for Circle operations
-export const DEFAULT_CIRCLE_CHAIN = baseSepolia;
+export const DEFAULT_CIRCLE_CHAIN = unichainConfig;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CIRCLE SMART ACCOUNT TYPES
