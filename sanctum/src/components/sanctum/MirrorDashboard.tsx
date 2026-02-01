@@ -207,6 +207,14 @@ export function MirrorDashboard() {
                     </div>
                 </div>
 
+                {/* Local Storage Warning */}
+                <div className="mx-1 mb-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-start md:items-center gap-2 text-blue-200 text-xs md:text-sm">
+                    <span className="material-symbols-outlined text-base md:text-lg shrink-0">perm_device_information</span>
+                    <p>
+                        <strong>Note:</strong> Pending Ghost Permits are stored locally on this device for security. They will not appear on other devices until they are executed on-chain.
+                    </p>
+                </div>
+
                 <div className="overflow-hidden bg-black/60 border border-white/5">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">

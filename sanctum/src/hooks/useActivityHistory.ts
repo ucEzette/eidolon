@@ -3,7 +3,7 @@ import { useAccount, usePublicClient } from 'wagmi';
 import { parseAbiItem, Log } from 'viem';
 
 // Canonical Permit2 Address
-const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 export interface ActivityEvent {
     hash: string;
@@ -61,6 +61,10 @@ export function useActivityHistory() {
         };
 
         fetchHistory();
+
+        // Poll every 30 seconds
+        const interval = setInterval(fetchHistory, 30000);
+        return () => clearInterval(interval);
     }, [address, publicClient]);
 
     return { events, loading };
