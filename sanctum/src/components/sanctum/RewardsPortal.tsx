@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useActivityHistory } from "@/hooks/useActivityHistory";
-import { useGhostPositions, GhostPosition } from "@/hooks/useGhostPositions";
+import { useGhostPositions, type GhostPosition } from "@/hooks/useGhostPositions";
 import { formatDistanceToNow } from 'date-fns';
 
 export function RewardsPortal() {
@@ -201,7 +201,8 @@ function Badge({ status }: { status: string }) {
         'Revoked': "text-red-400 bg-red-900/20 border-red-500/20",
         'Expired': "text-orange-400 bg-orange-900/20 border-orange-500/20",
         'Revoke': "text-red-400 bg-red-900/20 border-red-500/20", // Mapped from event type
-        'Interaction': "text-indigo-400 bg-indigo-900/20 border-indigo-500/20"
+        'Interaction': "text-indigo-400 bg-indigo-900/20 border-indigo-500/20",
+        'Earned': "text-yellow-400 bg-yellow-900/20 border-yellow-500/20"
     };
 
     const style = styles[status] || "text-white bg-gray-500/20";

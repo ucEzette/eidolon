@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
-import { parseAbiItem, Log } from 'viem';
+import { parseAbiItem, Log, formatUnits } from 'viem';
+import { CONTRACTS } from '@/config/web3';
 
 // Canonical Permit2 Address
 export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
@@ -9,8 +10,9 @@ export interface ActivityEvent {
     hash: string;
     blockNumber: bigint;
     timestamp: number;
-    type: 'Revoke' | 'Interaction';
+    type: 'Revoke' | 'Interaction' | 'Earned';
     description: string;
+    amount?: string;
 }
 
 export function useActivityHistory() {
@@ -25,19 +27,29 @@ export function useActivityHistory() {
         const fetchHistory = async () => {
             setLoading(true);
             try {
-                // Fetch Permit2 Invalidations (Revocations)
+                // 1. Fetch Permit2 Invalidations (Revocations)
                 const revocationLogs = await publicClient.getLogs({
                     address: PERMIT2_ADDRESS,
                     event: parseAbiItem('event NonceInvalidated(address indexed owner, uint256 word, uint256 mask, uint256 algorithm)'),
                     args: {
                         owner: address
                     },
-                    fromBlock: 'earliest' // In prod, maybe limit this range
+                    fromBlock: 'earliest'
+                });
+
+                // 2. Fetch LiquidityMaterialized (Earnings) from EidolonHook
+                const earningsLogs = await publicClient.getLogs({
+                    address: CONTRACTS.unichainSepolia.eidolonHook,
+                    event: parseAbiItem('event LiquidityMaterialized(address indexed provider, bytes32 poolId, uint256 amount, uint256 providerProfit)'),
+                    args: {
+                        provider: address
+                    },
+                    fromBlock: 'earliest'
                 });
 
                 const formattedEvents: ActivityEvent[] = [];
 
-                // Process logs
+                // Process Revocations
                 for (const log of revocationLogs) {
                     const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
                     formattedEvents.push({
@@ -46,6 +58,20 @@ export function useActivityHistory() {
                         timestamp: Number(block.timestamp) * 1000,
                         type: 'Revoke',
                         description: 'Revoked Permit Batch'
+                    });
+                }
+
+                // Process Earnings
+                for (const log of earningsLogs) {
+                    const block = await publicClient.getBlock({ blockNumber: log.blockNumber });
+                    const profit = formatUnits(log.args.providerProfit || 0n, 18); // Assuming 18 decimals for now
+                    formattedEvents.push({
+                        hash: log.transactionHash,
+                        blockNumber: log.blockNumber,
+                        timestamp: Number(block.timestamp) * 1000,
+                        type: 'Earned',
+                        description: `Earned ${parseFloat(profit).toFixed(6)} ETH`,
+                        amount: profit
                     });
                 }
 
