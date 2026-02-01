@@ -56,7 +56,9 @@ export function Navbar() {
                             <span className="text-xs font-mono font-medium text-slate-300">{networkName}</span>
                         </div>
                     )}
-                    <ConnectWallet />
+                    <div className="hidden md:block">
+                        <ConnectWallet />
+                    </div>
 
                     {/* Mobile Menu Button */}
                     <button
@@ -69,18 +71,24 @@ export function Navbar() {
             </div>
 
             {isMobileMenuOpen && (
-                <div className="md:hidden fixed inset-0 z-[100] bg-[#0a0a0f]/95 backdrop-blur-xl flex flex-col pt-24 px-6 gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                    <button
-                        className="absolute top-6 right-6 p-2 text-slate-400 hover:text-white"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                        <span className="material-symbols-outlined text-3xl">close</span>
-                    </button>
+                <div className="md:hidden absolute top-20 left-0 right-0 z-50 bg-[#0a0a0f] border-b border-white/10 shadow-2xl flex flex-col p-6 gap-4 animate-in slide-in-from-top-2 duration-200">
+                    <div className="flex flex-col gap-2 mb-2 border-b border-white/10 pb-4">
+                        <ConnectWallet />
+                        {isConnected && (
+                            <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-[#13131a] px-3 py-2">
+                                <div className="relative flex size-2.5">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex size-2.5 rounded-full bg-green-500"></span>
+                                </div>
+                                <span className="text-xs font-mono font-medium text-slate-300">{networkName}</span>
+                            </div>
+                        )}
+                    </div>
 
-                    <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
-                    <Link href="/mirror" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/mirror') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
-                    <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/analytics') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>
-                    <Link href="/rewards" onClick={() => setIsMobileMenuOpen(false)} className={`p-4 text-xl font-medium transition-all rounded-xl ${isActive('/rewards') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Rewards</Link>
+                    <Link href="/" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 text-lg font-medium transition-all rounded-lg ${isActive('/') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Sanctum</Link>
+                    <Link href="/mirror" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 text-lg font-medium transition-all rounded-lg ${isActive('/mirror') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Mirror</Link>
+                    <Link href="/analytics" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 text-lg font-medium transition-all rounded-lg ${isActive('/analytics') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Analytics</Link>
+                    <Link href="/rewards" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 text-lg font-medium transition-all rounded-lg ${isActive('/rewards') ? 'text-white bg-white/10 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>Rewards</Link>
                 </div>
             )}
         </nav>

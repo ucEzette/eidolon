@@ -230,7 +230,7 @@ export function SummoningPortal() {
                         <div className="relative flex items-center bg-black border border-white/10 hover:border-white/20 focus-within:border-phantom-cyan focus-within:shadow-[0_0_10px_-2px_rgba(165,243,252,0.3)] transition-all duration-300">
                             {/* Input */}
                             <input
-                                className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-2xl md:text-3xl font-medium placeholder-white/20 p-5 pr-32 caret-phantom-cyan"
+                                className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-xl md:text-3xl font-medium placeholder-white/20 p-5 pr-24 md:pr-32 caret-phantom-cyan"
                                 placeholder="0.00"
                                 type="text"
                                 value={amount}
@@ -242,10 +242,10 @@ export function SummoningPortal() {
                                     onClick={() => setIsTokenSelectorOpen(true)}
                                     className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white pl-2 pr-3 py-1.5 border border-white/10 transition-colors"
                                 >
-                                    <div className="size-6 rounded-none bg-white/10 flex items-center justify-center overflow-hidden">
-                                        <span className="text-xs font-bold text-white/80">{tokenA.symbol[0]}</span>
+                                    <div className="size-5 md:size-6 rounded-none bg-white/10 flex items-center justify-center overflow-hidden">
+                                        <span className="text-[10px] md:text-xs font-bold text-white/80">{tokenA.symbol[0]}</span>
                                     </div>
-                                    <span className="font-bold text-sm font-mono">{tokenA.symbol}</span>
+                                    <span className="font-bold text-xs md:text-sm font-mono">{tokenA.symbol}</span>
                                     <span className="material-symbols-outlined text-lg text-white/50">expand_more</span>
                                 </button>
                             </div>

@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "tokenA": "USDC",
+    "tokenB": "USDC",
+    "amountA": "5.0",
+    "amountB": "0",
+    "expiry": 1770593040389,
+    "signature": "0x294b22ede1120fd72c4b981c66649584382a8e1602c6b57756f0a83366d1b1210cc20448afb6ef5673611d6476abaf5a4f0f8282660ac027a2bb75d36919f7201b",
+    "liquidityMode": "one-sided",
+    "nonce": "1769988236423",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0x4306fa6a7000236c66bb4efa81efbede7e19c9041dad25d9e2e290e47194196b",
+    "id": "83b3e91a-5332-4d92-8c9a-35d3eda506e5",
+    "timestamp": 1769988240390,
+    "status": "Active"
+  }
+]
