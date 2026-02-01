@@ -17,7 +17,7 @@ type WalletMethod = "injected" | "walletconnect" | "passkey";
 
 export function ConnectWallet() {
   // Wagmi hooks for traditional wallets (v2 API)
-  const { address: wagmiAddress, isConnected: wagmiConnected, chain } = useAccount();
+  const { address: wagmiAddress, isConnected: wagmiConnected, connector } = useAccount();
   const { connectors, connect, isPending: wagmiLoading } = useConnect();
   const { disconnect: wagmiDisconnect } = useDisconnect();
   const { data: balance } = useBalance({
@@ -88,7 +88,7 @@ export function ConnectWallet() {
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           <span className="text-sm text-violet-300">
-            {circleConnected ? `Passkey: ${circleUsername}` : chain?.name || "Unknown"}
+            {circleConnected ? `Passkey: ${circleUsername}` : connector?.name || "External Wallet"}
           </span>
         </div>
 

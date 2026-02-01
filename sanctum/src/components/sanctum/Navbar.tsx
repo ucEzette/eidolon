@@ -1,15 +1,18 @@
-"use client";
-
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectWallet } from "@/components/wallet/ConnectWallet";
 import { useAccount } from "wagmi";
 import Image from "next/image";
+import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
 
 export function Navbar() {
     const pathname = usePathname();
-    const { isConnected, chain } = useAccount();
+    const { isConnected: isWagmiConnected, chain } = useAccount();
+    const { isConnected: isCircleConnected } = useCircleWallet();
+
+    const isConnected = isWagmiConnected || isCircleConnected;
+    const networkName = isCircleConnected ? "Unichain Sepolia" : (chain?.name || "Unknown Network");
 
     const isActive = (path: string) => pathname === path;
 
@@ -49,7 +52,7 @@ export function Navbar() {
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
                                 <span className="relative inline-flex size-2.5 rounded-full bg-green-500"></span>
                             </div>
-                            <span className="text-xs font-mono font-medium text-slate-300">{chain?.name || "Unknown Network"}</span>
+                            <span className="text-xs font-mono font-medium text-slate-300">{networkName}</span>
                         </div>
                     )}
                     <ConnectWallet />
