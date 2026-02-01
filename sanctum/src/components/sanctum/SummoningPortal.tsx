@@ -144,7 +144,7 @@ export function SummoningPortal() {
                             <label className="text-sm font-medium text-white/80">
                                 {liquidityMode === 'dual-sided' ? 'First Asset' : 'Asset Amount'}
                             </label>
-                            <span className="text-xs font-mono text-text-muted">Balance: 142.5 ETH</span>
+                            {/* Balance removed */}
                         </div>
                         <div className="relative flex items-center bg-black border border-white/10 hover:border-white/20 focus-within:border-phantom-cyan focus-within:shadow-[0_0_10px_-2px_rgba(165,243,252,0.3)] transition-all duration-300">
                             {/* Input */}
@@ -185,7 +185,7 @@ export function SummoningPortal() {
 
                             <div className="flex justify-between items-center mb-2 px-1">
                                 <label className="text-sm font-medium text-white/80">Second Asset</label>
-                                <span className="text-xs font-mono text-text-muted">Balance: 10,500 USDC</span>
+                                {/* Balance removed */}
                             </div>
                             <div className="relative flex items-center bg-surface-dark border border-purple-500/30 hover:border-purple-500/50 focus-within:border-purple-500/80 focus-within:shadow-[0_0_15px_-5px_#a855f7] rounded-xl transition-all duration-300">
                                 {/* Input */}
