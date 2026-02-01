@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useActivityHistory } from "@/hooks/useActivityHistory";
 import { useGhostPositions, GhostPosition } from "@/hooks/useGhostPositions";
 import { formatDistanceToNow } from 'date-fns';
 
 export function RewardsPortal() {
     const { positions } = useGhostPositions();
+    const { events, loading } = useActivityHistory();
     const [currentTime, setCurrentTime] = useState(Date.now());
 
     // Update time every minute to refresh rewards
@@ -16,8 +18,7 @@ export function RewardsPortal() {
 
     const activePositions = positions.filter(p => p.status === 'Active');
 
-    // Sort all positions by timestamp descending for activity log
-    const history = [...positions].sort((a, b) => b.timestamp - a.timestamp);
+    // History is now fetched from blockchain via useActivityHistory
 
     return (
         <div className="max-w-[1440px] mx-auto p-6 md:p-8 lg:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-full">
@@ -123,46 +124,55 @@ export function RewardsPortal() {
                 </div>
             </div>
 
-            {/* Activity Log (Synced with History) */}
+            {/* Activity Log (Blockchain Verified) */}
             <div className="w-full glass-panel rounded-xl flex flex-col border border-white/10 bg-white/[0.02]">
                 <div className="p-6 border-b border-white/5 flex items-center justify-between">
                     <h3 className="font-bold text-lg text-white font-display">Activity Log</h3>
                     <div className="flex gap-2">
-                        <span className="text-xs font-mono text-white/30">Synced with Local History</span>
+                        <span className="text-xs font-mono text-cyan-400 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                            Blockchain Verified
+                        </span>
                     </div>
                 </div>
 
                 <div className="p-2 space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar">
-                    {history.length === 0 ? (
-                        <div className="p-8 text-center text-white/30 font-mono text-sm">No recent activity.</div>
+                    {loading ? (
+                        <div className="p-8 text-center text-white/30 font-mono text-sm animate-pulse">
+                            Scanning blockchain events...
+                        </div>
+                    ) : events.length === 0 ? (
+                        <div className="p-8 text-center text-white/30 font-mono text-sm">No confirmed on-chain activity found.</div>
                     ) : (
-                        history.map((pos) => (
-                            <div key={pos.id} className="group flex flex-col gap-1.5 p-3 rounded hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5">
+                        events.map((event) => (
+                            <div key={event.hash} className="group flex flex-col gap-1.5 p-3 rounded hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
-                                        <Badge status={pos.status} />
+                                        <Badge status={event.type} />
                                         <span className="text-xs font-bold text-white/70">
-                                            {pos.liquidityMode === 'dual-sided' ? 'Dual-Sided' : 'One-Sided'} Permit
+                                            {event.description}
                                         </span>
                                     </div>
                                     <span className="text-[10px] text-white/40 font-mono">
-                                        {formatDistanceToNow(pos.timestamp, { addSuffix: true })}
+                                        {formatDistanceToNow(event.timestamp, { addSuffix: true })}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <div className="text-sm font-bold text-white font-mono">
-                                        {pos.amountA} {pos.tokenA} {pos.liquidityMode === 'dual-sided' ? `+ ${pos.amountB} ${pos.tokenB}` : ''}
+                                        Confirmed Transaction
                                     </div>
-                                    <span className="material-symbols-outlined text-[16px] text-white/20 group-hover:text-white transition-colors">open_in_new</span>
+                                    <a
+                                        href={`https://sepolia.uniscan.xyz/tx/${event.hash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="material-symbols-outlined text-[16px] text-white/20 group-hover:text-cyan-400 transition-colors"
+                                    >
+                                        open_in_new
+                                    </a>
                                 </div>
                                 <div className="text-[10px] font-mono text-white/30 truncate flex items-center gap-2">
-                                    <span>Pool: {pos.tokenA}/{pos.tokenB}</span>
-                                    {pos.txHash && (
-                                        <>
-                                            <span className="w-1 h-1 bg-white/20 rounded-full" />
-                                            <span className="text-cyan-400">Tx: {pos.txHash.slice(0, 6)}...{pos.txHash.slice(-4)}</span>
-                                        </>
-                                    )}
+                                    <span className="w-1 h-1 bg-white/20 rounded-full" />
+                                    <span className="text-cyan-400 font-mono">Tx: {event.hash.slice(0, 10)}...{event.hash.slice(-8)}</span>
                                 </div>
                             </div>
                         ))
@@ -189,7 +199,9 @@ function Badge({ status }: { status: string }) {
     const styles: Record<string, string> = {
         'Active': "text-emerald-400 bg-emerald-900/20 border-emerald-500/20",
         'Revoked': "text-red-400 bg-red-900/20 border-red-500/20",
-        'Expired': "text-orange-400 bg-orange-900/20 border-orange-500/20"
+        'Expired': "text-orange-400 bg-orange-900/20 border-orange-500/20",
+        'Revoke': "text-red-400 bg-red-900/20 border-red-500/20", // Mapped from event type
+        'Interaction': "text-indigo-400 bg-indigo-900/20 border-indigo-500/20"
     };
 
     const style = styles[status] || "text-white bg-gray-500/20";
