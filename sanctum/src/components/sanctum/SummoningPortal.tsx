@@ -58,11 +58,7 @@ export function SummoningPortal() {
         token: tokenB.isNative ? undefined : tokenB.address,
     });
 
-    // Debug Logs
-    useEffect(() => {
-        console.log("Token A:", tokenA, "Native:", tokenA.isNative, "Balance:", balanceA?.formatted, "Error:", errorA);
-        console.log("Token B:", tokenB, "Native:", tokenB.isNative, "Balance:", balanceB?.formatted, "Error:", errorB);
-    }, [tokenA, tokenB, balanceA, balanceB, errorA, errorB, liquidityMode]);
+
 
     const handleSign = async () => {
         if (!isConnected) return;

@@ -30,6 +30,7 @@ export function Navbar() {
                             src="/eidolonLOGO.png"
                             alt="EIDOLON"
                             fill
+                            sizes="(max-width: 768px) 100px, 128px"
                             className="object-contain filter brightness-125 drop-shadow-[0_0_8px_rgba(165,243,252,0.5)]"
                             priority
                         />
