@@ -39,6 +39,7 @@ export const unichainSepolia: Chain = {
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "demo";
 
 export const config = createConfig({
+    ssr: true, // Required for Next.js to avoid hydration mismatch
     chains: [unichainSepolia, mainnet],
     connectors: [
         injected(),

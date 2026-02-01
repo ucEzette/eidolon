@@ -45,60 +45,60 @@ export function MirrorDashboard() {
                 </div>
 
                 {/* Card 2: Ghost Permits */}
-                <div className="glass-panel relative overflow-hidden rounded-xl p-6 group bg-[#13131a]/60 backdrop-blur-xl border border-[#06b6d4]/15 hover:border-[#06b6d4]/30 transition-all">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-secondary/10 blur-3xl transition-all group-hover:bg-secondary/20"></div>
+                <div className="relative overflow-hidden p-6 group bg-black border border-white/10 hover:border-signal-cyan/50 transition-all">
+                    <div className="absolute -right-10 -top-10 h-32 w-32 bg-secondary/5 blur-3xl transition-all group-hover:bg-secondary/10"></div>
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Account Status</p>
+                            <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Account Status</p>
                             <div className="relative group/info">
-                                <button className="p-0.5 rounded-full hover:bg-white/10 transition-colors">
-                                    <span className="material-symbols-outlined text-[14px] text-slate-500 group-hover/info:text-secondary">info</span>
+                                <button className="p-0.5 hover:bg-white/10 transition-colors">
+                                    <span className="material-symbols-outlined text-[14px] text-slate-600 group-hover/info:text-secondary">info</span>
                                 </button>
-                                <div className="absolute left-0 top-6 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-secondary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-secondary text-xs mb-1">Membership Tier</p>
-                                    <p className="text-white/60 text-xs">{membership.isMember ? "You have an active membership defined by the contract." : "Standard users pay protocol fees on yield."}</p>
+                                <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-secondary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
+                                    <p className="font-bold text-secondary text-xs mb-1 font-mono uppercase">Membership Tier</p>
+                                    <p className="text-white/60 text-xs font-mono">{membership.isMember ? "Active membership." : "Standard user."}</p>
                                 </div>
                             </div>
                         </div>
-                        <span className="material-symbols-outlined text-slate-500">badge</span>
+                        <span className="material-symbols-outlined text-slate-600 group-hover:text-secondary transition-colors">badge</span>
                     </div>
                     <div className="flex items-baseline gap-3">
                         <h3 className="text-2xl font-bold text-white font-mono tracking-tighter">{userTier}</h3>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium border ${membership.isMember ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+                        <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider border ${membership.isMember ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
                             {membership.isMember ? 'Active' : 'Basic'}
                         </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
                         <span>Current Fee Rate: <span className="text-white">{feeTier}</span></span>
                     </div>
                 </div>
 
                 {/* Card 3: Your Rewards */}
-                <div className="glass-panel relative overflow-hidden rounded-xl p-6 group border border-primary/30 bg-[#13131a]/60 backdrop-blur-xl transition-all hover:bg-[#13131a]/80">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/20 blur-3xl transition-all group-hover:bg-primary/30"></div>
+                <div className="relative overflow-hidden p-6 group border border-phantom-cyan/30 bg-black hover:border-phantom-cyan/60 transition-all">
+                    <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/10 blur-3xl transition-all group-hover:bg-phantom-cyan/20"></div>
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-primary text-sm font-bold uppercase tracking-wider drop-shadow-[0_0_8px_rgba(137,90,246,0.5)]">Your Rewards</p>
+                            <p className="text-phantom-cyan text-sm font-bold uppercase tracking-widest drop-shadow-[0_0_8px_rgba(165,243,252,0.3)]">Your Rewards</p>
                             {/* Info Tooltip */}
                             <div className="relative group/info">
-                                <button className="p-0.5 rounded-full hover:bg-white/10 transition-colors">
-                                    <span className="material-symbols-outlined text-[14px] text-primary/60 group-hover/info:text-primary">info</span>
+                                <button className="p-0.5 hover:bg-white/10 transition-colors">
+                                    <span className="material-symbols-outlined text-[14px] text-phantom-cyan/60 group-hover/info:text-phantom-cyan">info</span>
                                 </button>
-                                <div className="absolute left-0 top-6 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-primary text-xs mb-1">EID Rewards</p>
-                                    <p className="text-white/60 text-xs">Protocol tokens earned from your Ghost Permits being used to service trades. Rewards accumulate per epoch.</p>
+                                <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
+                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">EID Rewards</p>
+                                    <p className="text-white/60 text-xs font-mono">Protocol tokens earned from your Ghost Permits.</p>
                                 </div>
                             </div>
                         </div>
-                        <span className="material-symbols-outlined text-primary">savings</span>
+                        <span className="material-symbols-outlined text-phantom-cyan">savings</span>
                     </div>
                     <div className="flex items-baseline justify-between w-full">
-                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">450.22 <span className="text-sm font-sans text-slate-400">EID</span></h3>
-                        <button className="glass-button bg-[#895af6]/10 border border-[#895af6]/30 hover:bg-[#895af6]/20 hover:border-[#895af6]/60 text-xs font-bold text-white px-3 py-1.5 rounded-lg uppercase tracking-wide transition-all shadow-none hover:shadow-[0_0_15px_rgba(137,90,246,0.3)]">
+                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">450.22 <span className="text-sm font-sans text-slate-500">EID</span></h3>
+                        <button className="bg-phantom-cyan/10 border border-phantom-cyan/30 hover:bg-phantom-cyan/20 hover:border-phantom-cyan api-transition text-xs font-bold text-phantom-cyan px-3 py-1.5 uppercase tracking-wider shadow-none hover:shadow-[0_0_10px_rgba(165,243,252,0.2)]">
                             Claim
                         </button>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
                         <span>Next epoch in 4h 12m</span>
                     </div>
                 </div>
@@ -121,42 +121,42 @@ export function MirrorDashboard() {
                     </div>
                 </div>
 
-                <div className="glass-panel rounded-xl overflow-hidden bg-[#13131a]/60 backdrop-blur-xl border border-white/5">
+                <div className="overflow-hidden bg-black/60 border border-white/5">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-white/5 bg-white/[0.02]">
-                                    <th className="px-6 py-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Asset Pair</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Staked Amount</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-slate-400 uppercase tracking-wider">Expiry Countdown</th>
-                                    <th className="px-6 py-4 text-xs font-medium text-slate-400 uppercase tracking-wider">
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Asset Pair</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Staked Amount</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Expiry Countdown</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">
                                         <div className="flex items-center gap-1.5">
                                             APY
                                             <div className="relative group/info">
-                                                <span className="material-symbols-outlined text-[12px] text-slate-500 group-hover/info:text-primary cursor-help">info</span>
-                                                <div className="absolute left-0 top-5 z-50 w-56 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
-                                                    <p className="font-bold text-primary text-xs mb-1">Annual Percentage Yield</p>
-                                                    <p className="text-white/60 text-xs">Estimated annual return based on your Ghost Permit&apos;s utilization rate. Higher trade volume = higher APY.</p>
+                                                <span className="material-symbols-outlined text-[12px] text-slate-600 group-hover/info:text-phantom-cyan cursor-help">info</span>
+                                                <div className="absolute left-0 top-5 z-50 w-56 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
+                                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">APY</p>
+                                                    <p className="text-white/60 text-xs font-mono">Annual Percentage Yield based on utilization.</p>
                                                 </div>
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 text-xs font-medium text-slate-400 uppercase tracking-wider text-right">
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-right">
                                         <div className="flex items-center gap-1.5 justify-end">
                                             Status
                                             <div className="relative group/info">
-                                                <span className="material-symbols-outlined text-[12px] text-slate-500 group-hover/info:text-primary cursor-help">info</span>
-                                                <div className="absolute right-0 top-5 z-50 w-64 p-3 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
-                                                    <div className="space-y-2 text-xs">
-                                                        <div><span className="text-emerald-400 font-bold">Active</span><span className="text-white/60"> - Permit ready for trades</span></div>
-                                                        <div><span className="text-amber-400 font-bold">Expiring Soon</span><span className="text-white/60"> - Less than 3 hours left</span></div>
-                                                        <div><span className="text-slate-400 font-bold">Expired</span><span className="text-white/60"> - No longer valid</span></div>
+                                                <span className="material-symbols-outlined text-[12px] text-slate-600 group-hover/info:text-phantom-cyan cursor-help">info</span>
+                                                <div className="absolute right-0 top-5 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
+                                                    <div className="space-y-2 text-xs font-mono">
+                                                        <div><span className="text-emerald-400 font-bold">Active</span><span className="text-white/60"> - Ready</span></div>
+                                                        <div><span className="text-amber-400 font-bold">Expiring</span><span className="text-white/60"> - {`<`} 3h</span></div>
+                                                        <div><span className="text-slate-400 font-bold">Expired</span><span className="text-white/60"> - Invalid</span></div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </th>
-                                    <th className="px-6 py-4 text-xs font-medium text-slate-400 uppercase tracking-wider text-right">Action</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 text-sm">

@@ -17,9 +17,9 @@ const config: Config = {
 
                 // Backgrounds
                 "background-light": "#0a0a0f", // Unused
-                "background-dark": "#030303", // Void
-                void: "#030303",
-                obsidian: "#000000",
+                "background-dark": "#02040a", // Obsidian Dark Blue
+                void: "#02040a",
+                obsidian: "#02040a",
 
                 // Surfaces
                 "card-dark": "rgba(0, 0, 0, 0.6)",

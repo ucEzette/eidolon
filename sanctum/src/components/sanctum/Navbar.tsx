@@ -17,7 +17,7 @@ export function Navbar() {
             <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-8">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 group">
-                    <div className="relative h-10 w-10 overflow-hidden rounded-none">
+                    <div className="relative h-32 w-32 overflow-hidden rounded-none">
                         <Image
                             src="/eidolonLOGO.png"
                             alt="EIDOLON"
@@ -28,47 +28,46 @@ export function Navbar() {
                     </div>
                     <h2 className="text-white text-2xl font-display font-bold tracking-widest uppercase drop-shadow-lg">EIDOLON</h2>
                 </Link>
-            </div>
 
-            {/* Desktop Nav */}
-            <div className="hidden md:flex items-center gap-1">
-                <Link
-                    href="/"
-                    className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                >
-                    Sanctum
-                </Link>
-                <Link
-                    href="/mirror"
-                    className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                >
-                    Mirror
-                </Link>
-                <Link
-                    href="#"
-                    className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
-                >
-                    Docs
-                </Link>
-            </div>
+                {/* Desktop Nav */}
+                <div className="hidden md:flex items-center gap-1">
+                    <Link
+                        href="/"
+                        className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        Sanctum
+                    </Link>
+                    <Link
+                        href="/mirror"
+                        className={`px-4 py-2 text-sm font-medium transition-colors rounded-lg ${isActive('/mirror') ? 'text-white bg-white/5 border border-white/10' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        Mirror
+                    </Link>
+                    <Link
+                        href="#"
+                        className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                    >
+                        Docs
+                    </Link>
+                </div>
 
-            {/* Right Actions */}
-            <div className="flex items-center gap-3">
-                {/* Network Status */}
-                {isConnected && (
-                    <div className="hidden sm:flex items-center gap-2 rounded-full border border-primary/20 bg-[#13131a] px-3 py-1.5 pr-4">
-                        <div className="relative flex size-2.5">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
-                            <span className="relative inline-flex size-2.5 rounded-full bg-green-500"></span>
+                {/* Right Actions */}
+                <div className="flex items-center gap-3">
+                    {/* Network Status */}
+                    {isConnected && (
+                        <div className="hidden sm:flex items-center gap-2 rounded-full border border-primary/20 bg-[#13131a] px-3 py-1.5 pr-4">
+                            <div className="relative flex size-2.5">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                                <span className="relative inline-flex size-2.5 rounded-full bg-green-500"></span>
+                            </div>
+                            <span className="text-xs font-mono font-medium text-slate-300">{chain?.name || "Unknown Network"}</span>
                         </div>
-                        <span className="text-xs font-mono font-medium text-slate-300">{chain?.name || "Unknown Network"}</span>
-                    </div>
-                )}
+                    )}
 
-                {/* Connect Wallet */}
-                <ConnectWallet />
+                    {/* Connect Wallet */}
+                    <ConnectWallet />
+                </div>
             </div>
-        </div>
         </nav >
     );
 }
