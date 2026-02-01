@@ -45,7 +45,8 @@ export function ConnectWallet() {
 
   // Unified connection state
   const isConnected = wagmiConnected || circleConnected;
-  const address = wagmiAddress || circleAddress;
+  // FIX: Prioritize Circle Address if connected, otherwise fallback to Wagmi
+  const address = circleConnected ? circleAddress : wagmiAddress;
   const isLoading = wagmiLoading || circleConnecting;
 
   // Handle passkey submission
@@ -57,6 +58,11 @@ export function ConnectWallet() {
 
     setPasskeyError(null);
     try {
+      // FIX: Ensure clean state by disconnecting injected wallet if active
+      if (wagmiConnected) {
+        wagmiDisconnect();
+      }
+
       if (passkeyMode === "register") {
         await registerPasskey(passkeyUsername);
       } else {
@@ -272,6 +278,7 @@ export function ConnectWallet() {
               <button
                 key={connector.uid}
                 onClick={() => {
+                  if (circleConnected) circleDisconnect();
                   connect({ connector });
                   setShowMethods(false);
                 }}
@@ -308,6 +315,7 @@ export function ConnectWallet() {
             <button
               key={connector.uid}
               onClick={() => {
+                if (circleConnected) circleDisconnect();
                 connect({ connector });
                 setShowMethods(false);
               }}
