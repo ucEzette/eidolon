@@ -1,10 +1,26 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useGhostPositions, GhostPosition } from "@/hooks/useGhostPositions";
+import { formatDistanceToNow } from 'date-fns';
 
 export function RewardsPortal() {
+    const { positions } = useGhostPositions();
+    const [currentTime, setCurrentTime] = useState(Date.now());
+
+    // Update time every minute to refresh rewards
+    useEffect(() => {
+        const interval = setInterval(() => setCurrentTime(Date.now()), 60000);
+        return () => clearInterval(interval);
+    }, []);
+
+    const activePositions = positions.filter(p => p.status === 'Active');
+
+    // Sort all positions by timestamp descending for activity log
+    const history = [...positions].sort((a, b) => b.timestamp - a.timestamp);
+
     return (
-        <div className="max-w-[1440px] mx-auto p-6 md:p-8 lg:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="max-w-[1440px] mx-auto p-6 md:p-8 lg:p-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 h-full">
 
             {/* Hero: Global Multiplier Card */}
             <div className="relative overflow-hidden rounded-2xl border border-cyan-500/30 bg-[#02040a] p-6 md:p-8 shadow-[0_0_25px_-5px_rgba(6,182,212,0.15)] group">
@@ -19,13 +35,7 @@ export function RewardsPortal() {
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-cyan-100 to-white/70">3.42x</span>
                             <span className="text-2xl md:text-3xl text-white/40 font-normal ml-2">Global Boost</span>
                         </h1>
-                        <p className="text-white/60 max-w-md text-sm md:text-base">Your liquidity positions are currently earning multiplied yields across all Sanctum vaults.</p>
-                    </div>
-                    {/* Timer */}
-                    <div className="flex gap-3">
-                        <TimerBox value="04" label="Hrs" />
-                        <TimerBox value="23" label="Min" />
-                        <TimerBox value="45" label="Sec" isCyan />
+                        <p className="text-white/60 max-w-md text-sm md:text-base">Your permitted liquidity positions are currently earning multiplied yields.</p>
                     </div>
                 </div>
             </div>
@@ -34,77 +44,129 @@ export function RewardsPortal() {
             <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2 font-display">
                     <span className="material-symbols-outlined text-cyan-400">grid_view</span>
-                    Reward Vaults
+                    Permitted Pools & Rewards
                 </h2>
-                <button className="text-sm text-cyan-400 hover:text-white transition-colors flex items-center gap-1">
-                    View Analytics <span className="material-symbols-outlined text-[16px]">arrow_outward</span>
-                </button>
             </div>
 
-            {/* Vaults Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6">
-                <VaultCard
-                    title="EIDOLON Vault"
-                    amount="1,240.50"
-                    symbol="Pending EIDOLON"
-                    icon="diamond"
-                    iconColor="text-indigo-400"
-                    iconBg="bg-indigo-900/50"
-                    strokeColor="#0dccf2"
-                />
-                <VaultCard
-                    title="wETH Vault"
-                    amount="0.45"
-                    symbol="Pending ETH"
-                    icon="currency_bitcoin"
-                    iconColor="text-blue-400"
-                    iconBg="bg-blue-900/50"
-                    strokeColor="#3b82f6"
-                />
-                <VaultCard
-                    title="USDC Vault"
-                    amount="850.00"
-                    symbol="Pending USDC"
-                    icon="attach_money"
-                    iconColor="text-emerald-400"
-                    iconBg="bg-emerald-900/50"
-                    strokeColor="#10b981"
-                />
-                <VaultCard
-                    title="Governance"
-                    amount="45.00"
-                    symbol="Pending veSAN"
-                    icon="layers"
-                    iconColor="text-orange-400"
-                    iconBg="bg-orange-900/50"
-                    strokeColor="#f97316"
-                    isStaking
-                />
+            {/* Permitted Pools Table (Replacing Vaults Grid) */}
+            <div className="w-full glass-panel rounded-xl overflow-hidden border border-white/10 bg-white/[0.02] shadow-2xl">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="border-b border-white/5 bg-white/[0.02]">
+                                <th className="px-6 py-4 text-xs font-bold text-white/50 uppercase tracking-wider font-mono">Pool Pair</th>
+                                <th className="px-6 py-4 text-xs font-bold text-white/50 uppercase tracking-wider font-mono">Liquidity</th>
+                                <th className="px-6 py-4 text-xs font-bold text-white/50 uppercase tracking-wider font-mono">APR (Boosted)</th>
+                                <th className="px-6 py-4 text-xs font-bold text-cyan-400 uppercase tracking-wider font-mono text-right">Earned Rewards</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-sm">
+                            {activePositions.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-mono">
+                                        No active permitted pools. Summon a Ghost Permit to start earning.
+                                    </td>
+                                </tr>
+                            ) : (
+                                activePositions.map((pos) => {
+                                    const rewards = calculateRewards(pos, currentTime);
+                                    return (
+                                        <tr key={pos.id} className="group hover:bg-white/[0.02] transition-colors">
+                                            {/* Pool Pair */}
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex -space-x-2">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-800 border-2 border-[#0a1016] flex items-center justify-center text-[10px] font-bold z-10 relative">
+                                                            {pos.tokenA[0]}
+                                                        </div>
+                                                        <div className="w-8 h-8 rounded-full bg-slate-700 border-2 border-[#0a1016] flex items-center justify-center text-[10px] font-bold">
+                                                            {pos.tokenB[0]}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-white">{pos.tokenA}/{pos.tokenB}</div>
+                                                        <div className="text-xs text-white/40 font-mono capitalize">{pos.liquidityMode}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            {/* Liquidity */}
+                                            <td className="px-6 py-4 font-mono text-white/80">
+                                                <div>{pos.amountA} {pos.tokenA}</div>
+                                                {pos.liquidityMode === 'dual-sided' && (
+                                                    <div className="text-xs text-white/40">+ {pos.amountB} {pos.tokenB}</div>
+                                                )}
+                                            </td>
+
+                                            {/* APR */}
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-950 text-cyan-400 border border-cyan-800">
+                                                    142.5%
+                                                </span>
+                                            </td>
+
+                                            {/* Earned Rewards */}
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="font-mono font-bold text-cyan-400 text-lg">
+                                                    {rewards.toFixed(6)} EIDOLON
+                                                </div>
+                                                <div className="text-xs text-white/30">
+                                                    ≈ ${(rewards * 0.45).toFixed(2)}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            {/* History Panel */}
+            {/* Activity Log (Synced with History) */}
             <div className="w-full glass-panel rounded-xl flex flex-col border border-white/10 bg-white/[0.02]">
                 <div className="p-6 border-b border-white/5 flex items-center justify-between">
                     <h3 className="font-bold text-lg text-white font-display">Activity Log</h3>
                     <div className="flex gap-2">
-                        <button className="p-1.5 hover:bg-white/5 rounded text-white/50 hover:text-white transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">filter_list</span>
-                        </button>
-                        <button className="p-1.5 hover:bg-white/5 rounded text-white/50 hover:text-white transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">refresh</span>
-                        </button>
+                        <span className="text-xs font-mono text-white/30">Synced with Local History</span>
                     </div>
                 </div>
 
-                <div className="p-2 space-y-1">
-                    <HistoryItem label="CLAIMED" time="12m ago" amount="450.00 USDC" hash="0x3a2...8b91" color="green" />
-                    <HistoryItem label="STAKED" time="2h ago" amount="1,000 EIDOLON" hash="0x7f2...4c12" color="cyan" />
-                    <HistoryItem label="CLAIMED" time="5h ago" amount="0.12 wETH" hash="0x1e9...2d44" color="green" />
-                </div>
-                <div className="p-4 border-t border-white/5">
-                    <button className="w-full py-2.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-xs font-mono text-white/60 hover:text-white">
-                        View All on Explorer
-                    </button>
+                <div className="p-2 space-y-1 max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {history.length === 0 ? (
+                        <div className="p-8 text-center text-white/30 font-mono text-sm">No recent activity.</div>
+                    ) : (
+                        history.map((pos) => (
+                            <div key={pos.id} className="group flex flex-col gap-1.5 p-3 rounded hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Badge status={pos.status} />
+                                        <span className="text-xs font-bold text-white/70">
+                                            {pos.liquidityMode === 'dual-sided' ? 'Dual-Sided' : 'One-Sided'} Permit
+                                        </span>
+                                    </div>
+                                    <span className="text-[10px] text-white/40 font-mono">
+                                        {formatDistanceToNow(pos.timestamp, { addSuffix: true })}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm font-bold text-white font-mono">
+                                        {pos.amountA} {pos.tokenA} {pos.liquidityMode === 'dual-sided' ? `+ ${pos.amountB} ${pos.tokenB}` : ''}
+                                    </div>
+                                    <span className="material-symbols-outlined text-[16px] text-white/20 group-hover:text-white transition-colors">open_in_new</span>
+                                </div>
+                                <div className="text-[10px] font-mono text-white/30 truncate flex items-center gap-2">
+                                    <span>Pool: {pos.tokenA}/{pos.tokenB}</span>
+                                    {pos.txHash && (
+                                        <>
+                                            <span className="w-1 h-1 bg-white/20 rounded-full" />
+                                            <span className="text-cyan-400">Tx: {pos.txHash.slice(0, 6)}...{pos.txHash.slice(-4)}</span>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </div>
 
@@ -112,71 +174,29 @@ export function RewardsPortal() {
     );
 }
 
-function TimerBox({ value, label, isCyan }: { value: string, label: string, isCyan?: boolean }) {
-    return (
-        <div className="flex flex-col items-center gap-1">
-            <div className={`w-14 h-14 flex items-center justify-center rounded-lg bg-[#0a1016] border border-white/10 shadow-inner ${isCyan ? 'border-cyan-500/30' : ''}`}>
-                <span className={`text-xl font-bold font-mono ${isCyan ? 'text-cyan-400' : 'text-white'}`}>{value}</span>
-            </div>
-            <span className="text-[10px] uppercase tracking-wider text-white/40">{label}</span>
-        </div>
-    )
+// Helper to mock reward calculation
+function calculateRewards(pos: GhostPosition, currentTime: number) {
+    // Mock APR 142.5%
+    // Formula: Principal * APR * (TimeElapsed / Year)
+    // Simplify: just assume 1 unit of liquidity generates 0.000001 reward per ms for demo
+    const timeElapsed = currentTime - pos.timestamp;
+    const principal = parseFloat(pos.amountA);
+    // This is purely for visual demo
+    return principal * 0.0000001 * timeElapsed;
 }
 
-function VaultCard({ title, amount, symbol, icon, iconColor, iconBg, strokeColor, isStaking }: any) {
-    return (
-        <div className="rounded-xl p-6 bg-[#0a1016]/60 border border-white/5 hover:border-cyan-500/30 transition-all duration-300 relative overflow-hidden group">
-            <div className="flex justify-between items-start mb-6">
-                <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full ${iconBg} flex items-center justify-center border border-white/10`}>
-                        <span className={`material-symbols-outlined ${iconColor}`}>{icon}</span>
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-lg leading-tight text-white">{title}</h3>
-                        <span className="text-xs text-green-400 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                            {isStaking ? 'Vested' : 'Accumulating'}
-                        </span>
-                    </div>
-                </div>
-                <div className="text-right">
-                    <p className="text-2xl font-bold font-mono tracking-tight text-white">{amount}</p>
-                    <p className="text-xs text-white/40">{symbol}</p>
-                </div>
-            </div>
-            {/* Simple SVG Chart */}
-            <div className="h-24 w-full mb-6 relative opacity-80 group-hover:opacity-100 transition-opacity">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 200 60">
-                    <path d="M0 50 C 20 40, 40 55, 60 35 S 100 20, 140 30 S 180 10, 200 5 V 60 H 0 Z" fill={strokeColor} fillOpacity="0.1" />
-                    <path d="M0 50 C 20 40, 40 55, 60 35 S 100 20, 140 30 S 180 10, 200 5" fill="none" stroke={strokeColor} strokeWidth="2" />
-                </svg>
-            </div>
-            <button className={`w-full py-3 rounded-lg bg-white/5 border border-white/10 ${isStaking ? 'hover:border-orange-500 hover:text-orange-400' : 'hover:border-cyan-500 hover:text-cyan-400'} hover:bg-white/10 transition-all font-bold text-sm flex items-center justify-center gap-2`}>
-                {isStaking ? 'Claim & Stake' : 'Claim Rewards'}
-                <span className="material-symbols-outlined text-[18px]">{isStaking ? 'lock' : 'download'}</span>
-            </button>
-        </div>
-    )
-}
+function Badge({ status }: { status: string }) {
+    const styles: Record<string, string> = {
+        'Active': "text-emerald-400 bg-emerald-900/20 border-emerald-500/20",
+        'Revoked': "text-red-400 bg-red-900/20 border-red-500/20",
+        'Expired': "text-orange-400 bg-orange-900/20 border-orange-500/20"
+    };
 
-function HistoryItem({ label, time, amount, hash, color }: any) {
-    const colorClasses = {
-        green: "text-green-400 bg-green-900/20 border-green-500/20",
-        cyan: "text-cyan-400 bg-cyan-900/20 border-cyan-500/20",
-        orange: "text-orange-400 bg-orange-900/20 border-orange-500/20"
-    }[color as 'green' | 'cyan' | 'orange'] || "text-white bg-gray-500/20";
+    const style = styles[status] || "text-white bg-gray-500/20";
 
     return (
-        <div className="group flex flex-col gap-1.5 p-3 rounded hover:bg-white/5 transition-colors cursor-pointer border border-transparent hover:border-white/5">
-            <div className="flex items-center justify-between">
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${colorClasses}`}>{label}</span>
-                <span className="text-[10px] text-white/40 font-mono">{time}</span>
-            </div>
-            <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-white">{amount}</span>
-                <span className="material-symbols-outlined text-[16px] text-white/20 group-hover:text-white transition-colors">open_in_new</span>
-            </div>
-            <div className="text-[10px] font-mono text-white/30 truncate">{hash}</div>
-        </div>
-    )
+        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${style} uppercase`}>
+            {status}
+        </span>
+    );
 }

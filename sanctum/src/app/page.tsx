@@ -21,10 +21,7 @@ export default function Home() {
 
         {/* Footer / Trust Badges */}
         <div className="mt-8 flex gap-6 opacity-40 hover:opacity-100 transition-opacity duration-300">
-          <div className="flex items-center gap-2 text-white/60 text-xs font-mono">
-            <span className="material-symbols-outlined text-[16px]">lock</span>
-            Audited by Trail of Bits
-          </div>
+          {/* Audited by Trail of Bits removed */}
           <div className="flex items-center gap-2 text-white/60 text-xs font-mono">
             <span className="material-symbols-outlined text-[16px]">verified_user</span>
             EIP-712 Compliant

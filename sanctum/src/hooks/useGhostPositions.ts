@@ -15,6 +15,7 @@ export interface GhostPosition {
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
     nonce: string; // Storing as string to avoid serialization issues
+    txHash?: string;
 }
 
 const STORAGE_KEY = "eidolon_ghost_positions";
@@ -51,8 +52,10 @@ export function useGhostPositions() {
         localStorage.setItem(STORAGE_KEY, serialized);
     };
 
-    const removePosition = (id: string) => {
-        const updated = positions.filter(p => p.id !== id);
+    const revokePosition = (id: string, txHash?: string) => {
+        const updated = positions.map(p =>
+            p.id === id ? { ...p, status: 'Revoked' as const, txHash } : p
+        );
         setPositions(updated);
 
         // Handle BigInt serialization
@@ -65,6 +68,6 @@ export function useGhostPositions() {
     return {
         positions,
         addPosition,
-        removePosition
+        revokePosition
     };
 }

@@ -13,8 +13,10 @@ export function MirrorDashboard() {
     const [selectedPosition, setSelectedPosition] = useState<any>(null);
     const [showTokenSelector, setShowTokenSelector] = useState(false);
     const { fees, membership } = useEidolonHook();
-    const { positions, removePosition } = useGhostPositions();
+    const { positions, revokePosition } = useGhostPositions();
     const { revokePermit, isPending: isRevoking } = useRevokePermit();
+
+    const activePositions = positions.filter(p => p.status === 'Active');
 
     // ... (keep existing variables)
 
@@ -26,14 +28,15 @@ export function MirrorDashboard() {
     const confirmRevoke = async () => {
         if (selectedPosition) {
             try {
+                let txHash = undefined;
                 if (selectedPosition.nonce) {
-                    await revokePermit(selectedPosition.nonce);
+                    txHash = await revokePermit(selectedPosition.nonce);
                     toast.success("Permit revoked on-chain successfully");
                 } else {
                     console.warn("No nonce found for position, removing locally only");
                 }
 
-                removePosition(selectedPosition.id);
+                revokePosition(selectedPosition.id, txHash);
                 setShowRevokeModal(false);
                 setSelectedPosition(null);
             } catch (error) {
@@ -243,14 +246,14 @@ export function MirrorDashboard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 text-sm">
-                                {positions.length === 0 ? (
+                                {activePositions.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-mono">
                                             No active Ghost Permits found. Summon one to begin.
                                         </td>
                                     </tr>
                                 ) : (
-                                    positions.map((pos) => {
+                                    activePositions.map((pos) => {
                                         const now = Date.now();
                                         const timeLeft = Math.max(0, pos.expiry - now);
                                         const hours = Math.floor(timeLeft / (1000 * 60 * 60));

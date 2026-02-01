@@ -187,7 +187,7 @@ export function SummoningPortal() {
                                     : 'bg-transparent text-slate-500 border-white/10 hover:border-white/20 hover:text-white'}`}
                         >
                             <span className="material-symbols-outlined text-[18px]">radio_button_checked</span>
-                            One-Sided ({fees.singleSided}%)
+                            One-Sided
                         </button>
                         <button
                             onClick={() => setLiquidityMode('dual-sided')}
@@ -197,7 +197,7 @@ export function SummoningPortal() {
                                     : 'bg-transparent text-slate-500 border-white/10 hover:border-white/20 hover:text-white'}`}
                         >
                             <span className="material-symbols-outlined text-[18px]">radio_button_checked</span>
-                            Dual-Sided ({fees.dualSided}%)
+                            Dual-Sided
                         </button>
                     </div>
                 </div>
