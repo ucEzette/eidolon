@@ -3,7 +3,7 @@
 import { http, createConfig } from "wagmi";
 import { type Chain } from "viem";
 import { mainnet } from "wagmi/chains";
-import { injected, walletConnect, metaMask, coinbaseWallet, safe } from "wagmi/connectors";
+import { injected, walletConnect } from "wagmi/connectors";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UNICHAIN SEPOLIA CHAIN DEFINITION
@@ -42,7 +42,7 @@ export const config = createConfig({
     ssr: true, // Required for Next.js to avoid hydration mismatch
     chains: [unichainSepolia, mainnet],
     connectors: [
-        injected(), 
+        injected(),
         walletConnect({ projectId, showQrModal: false }),
     ],
     transports: {
