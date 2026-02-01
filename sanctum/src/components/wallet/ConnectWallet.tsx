@@ -267,11 +267,7 @@ export function ConnectWallet() {
 
           {/* Traditional Wallet Options (wagmi v2) */}
           {connectors
-            .filter((c, index, self) =>
-              c.type !== 'walletConnect' &&
-              // Filter out duplicate names (e.g. Injected + MetaMask both showing up as "MetaMask")
-              index === self.findIndex((t) => t.name === c.name || (t.id === c.id && t.id !== 'injected'))
-            )
+            .filter((c) => c.type !== 'walletConnect')
             .map((connector) => (
               <button
                 key={connector.uid}
@@ -289,8 +285,8 @@ export function ConnectWallet() {
                     <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask" className="w-5 h-5" />
                   ) : connector.name.toLowerCase().includes('coinbase') ? (
                     <div className="w-5 h-5 rounded-full bg-[#0052FF] flex items-center justify-center text-white text-[10px] font-bold">C</div>
-                  ) : connector.name.toLowerCase().includes('safe') ? (
-                    <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center text-white text-[10px] font-bold">S</div>
+                  ) : connector.id === 'injected' ? (
+                    <div className="w-5 h-5 rounded-full bg-slate-700 flex items-center justify-center text-white text-[10px] font-bold">W</div>
                   ) : (
                     <svg className="w-4 h-4" viewBox="0 0 40 40" fill="none">
                       <path d="M20 40c11.046 0 20-8.954 20-20S31.046 0 20 0 0 8.954 0 20s8.954 20 20 20z" fill="#F6851B" />
@@ -298,9 +294,9 @@ export function ConnectWallet() {
                   )}
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-medium">{connector.name}</div>
+                  <div className="text-sm font-medium">{connector.name === 'Injected' ? 'Browser Wallet' : connector.name}</div>
                   <div className="text-xs text-gray-500">
-                    {connector.name === 'MetaMask' ? 'Popular' : 'Browser wallet'}
+                    {connector.name === 'MetaMask' ? 'Popular' : 'Extension'}
                   </div>
                 </div>
               </button>

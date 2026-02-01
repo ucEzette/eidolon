@@ -42,10 +42,7 @@ export const config = createConfig({
     ssr: true, // Required for Next.js to avoid hydration mismatch
     chains: [unichainSepolia, mainnet],
     connectors: [
-        injected({ shimDisconnect: true }), // Fallback
-        metaMask(), // Optimized execution
-        coinbaseWallet({ appName: "Eidolon Sanctum" }),
-        safe(),
+        injected(), 
         walletConnect({ projectId, showQrModal: false }),
     ],
     transports: {
