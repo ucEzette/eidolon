@@ -5,14 +5,76 @@ import { useEidolonHook } from "@/hooks/useEidolonHook";
 import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
+import { useRevokePermit } from "@/hooks/useRevokePermit";
+import { toast } from "sonner";
 
 export function MirrorDashboard() {
     const [showRevokeModal, setShowRevokeModal] = useState(false);
+    const [selectedPosition, setSelectedPosition] = useState<any>(null);
     const [showTokenSelector, setShowTokenSelector] = useState(false);
     const { fees, membership } = useEidolonHook();
-    const { positions } = useGhostPositions();
+    const { positions, removePosition } = useGhostPositions();
+    const { revokePermit, isPending: isRevoking } = useRevokePermit();
 
-    // For demo purposes, we'll calculate rewards based on membership status
+    // ... (keep existing variables)
+
+    const handleRevokeClick = (pos: any) => {
+        setSelectedPosition(pos);
+        setShowRevokeModal(true);
+    };
+
+    const confirmRevoke = async () => {
+        if (selectedPosition) {
+            try {
+                if (selectedPosition.nonce) {
+                    await revokePermit(selectedPosition.nonce);
+                    toast.success("Permit revoked on-chain successfully");
+                } else {
+                    console.warn("No nonce found for position, removing locally only");
+                }
+
+                removePosition(selectedPosition.id);
+                setShowRevokeModal(false);
+                setSelectedPosition(null);
+            } catch (error) {
+                console.error("Failed to revoke:", error);
+                toast.error("Failed to revoke permit");
+            }
+        }
+    };
+
+    // ... inside Modal Button ...
+
+    <button
+        onClick={confirmRevoke}
+        disabled={isRevoking}
+        className="group relative flex items-center justify-center overflow-hidden rounded-lg bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-neon-danger transition-all hover:bg-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.6)] disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1s_infinite]"></div>
+        {isRevoking ? (
+            <span className="flex items-center gap-2">
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Revoking...
+            </span>
+        ) : (
+            <>
+                <span className="material-symbols-outlined mr-2 text-lg">delete_forever</span>
+                Confirm Revoke
+            </>
+        )}
+    </button>
+
+    // Helper for modal time display
+    const getModalTimeLeft = () => {
+        if (!selectedPosition) return "";
+        const now = Date.now();
+        const timeLeft = Math.max(0, selectedPosition.expiry - now);
+        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+        return timeLeft <= 0 ? "Expired" : `${hours}h ${minutes}m`;
+    };
+
+    // Helper for modal time display moved up, clean render block follows
     // In a real app, this would query the contract or an indexer for actual earnings
     const userTier = membership.isMember ? "Pro Member" : "Standard User";
     const feeTier = membership.isMember ? "0%" : `${fees.dualSided}%`;
@@ -148,7 +210,7 @@ export function MirrorDashboard() {
                             <thead>
                                 <tr className="border-b border-white/5 bg-white/[0.02]">
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Asset Pair</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Staked Amount</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Liquidity</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Expiry Countdown</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">
                                         <div className="flex items-center gap-1.5">
@@ -195,6 +257,8 @@ export function MirrorDashboard() {
                                         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                                         const isExpired = timeLeft <= 0;
                                         const isExpiringSoon = timeLeft < 3 * 60 * 60 * 1000 && !isExpired;
+                                        // Default to one-sided if undefined (legacy data)
+                                        const isDual = pos.liquidityMode === 'dual-sided';
 
                                         return (
                                             <tr key={pos.id} className="group hover:bg-white/[0.02] transition-colors">
@@ -205,13 +269,23 @@ export function MirrorDashboard() {
                                                             <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB}</div>
                                                         </div>
                                                         <div>
-                                                            <div className="font-bold text-white">{pos.tokenA}-{pos.tokenB}</div>
-                                                            <div className="text-xs text-slate-500">Unichain Sepolia</div>
+                                                            <div className="font-bold text-white flex items-center gap-2">
+                                                                {pos.tokenA}-{pos.tokenB}
+                                                                <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${isDual ? 'text-purple-300 border-purple-500/30 bg-purple-500/10' : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'}`}>
+                                                                    {isDual ? 'Dual' : 'Single'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-xs text-slate-500">Unichain Sepolia • V4</div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-slate-300">
-                                                    {pos.amountA} <span className="text-xs text-slate-500">{pos.tokenA}</span>
+                                                    <div className="flex flex-col">
+                                                        <span>{pos.amountA} <span className="text-xs text-slate-500">{pos.tokenA}</span></span>
+                                                        {isDual && (
+                                                            <span>{pos.amountB} <span className="text-xs text-slate-500">{pos.tokenB}</span></span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className={`flex items-center gap-2 font-mono ${isExpired ? 'text-red-400' : (isExpiringSoon ? 'text-amber-400' : 'text-emerald-400')}`}>
@@ -219,7 +293,9 @@ export function MirrorDashboard() {
                                                         {isExpired ? "Expired" : `${hours}h ${minutes}m`}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 font-mono text-primary font-bold">12.4%</td>
+                                                <td className="px-6 py-4 font-mono text-primary font-bold">
+                                                    {isDual ? '18.2%' : '12.4%'}
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border shadow-[0_0_10px_rgba(16,185,129,0.2)]
                                                         ${isExpired ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
@@ -234,13 +310,11 @@ export function MirrorDashboard() {
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <button
-                                                        onClick={() => {
-                                                            // In a real app, this would set the selected position for revocation logic
-                                                            setShowRevokeModal(true)
-                                                        }}
+                                                        onClick={() => handleRevokeClick(pos)}
                                                         className="text-slate-400 hover:text-white transition-colors"
+                                                        title="Revoke Permit"
                                                     >
-                                                        <span className="material-symbols-outlined">more_vert</span>
+                                                        <span className="material-symbols-outlined">delete</span>
                                                     </button>
                                                 </td>
                                             </tr>
@@ -254,7 +328,8 @@ export function MirrorDashboard() {
             </div>
 
             {/* Revoke Modal */}
-            {showRevokeModal && (
+            {/* Revoke Modal */}
+            {showRevokeModal && selectedPosition && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0a0a0f]/80 backdrop-blur-sm">
                     <div className="glass-modal relative w-full max-w-md transform overflow-hidden rounded-2xl border border-red-500/30 p-1 shadow-2xl transition-all bg-[rgba(10,10,15,0.85)] backdrop-blur-2xl">
                         <div className="relative flex flex-col items-center p-6 sm:p-8">
@@ -274,19 +349,24 @@ export function MirrorDashboard() {
                                         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Token Pair</span>
                                         <div className="flex items-center gap-2">
                                             <div className="flex -space-x-1.5">
-                                                <div className="h-5 w-5 rounded-full bg-slate-700 ring-1 ring-[#13131a] flex items-center justify-center text-[6px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">E</div>
-                                                <div className="h-5 w-5 rounded-full bg-slate-700 ring-1 ring-[#13131a] flex items-center justify-center text-[6px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">U</div>
+                                                <div className="h-5 w-5 rounded-full bg-slate-700 ring-1 ring-[#13131a] flex items-center justify-center text-[6px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{selectedPosition.tokenA[0]}</div>
+                                                <div className="h-5 w-5 rounded-full bg-slate-700 ring-1 ring-[#13131a] flex items-center justify-center text-[6px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{selectedPosition.tokenB[0]}</div>
                                             </div>
-                                            <span className="font-mono text-sm font-bold text-white">ETH-USDC</span>
+                                            <span className="font-mono text-sm font-bold text-white">{selectedPosition.tokenA}-{selectedPosition.tokenB}</span>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                                        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Amount</span>
-                                        <span className="font-mono text-sm font-bold text-white">5.20 ETH</span>
+                                        <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Liquidity</span>
+                                        <div className="flex flex-col items-end">
+                                            <span className="font-mono text-sm font-bold text-white">{selectedPosition.amountA} {selectedPosition.tokenA}</span>
+                                            {selectedPosition.liquidityMode === 'dual-sided' && (
+                                                <span className="font-mono text-xs text-slate-400">{selectedPosition.amountB} {selectedPosition.tokenB}</span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">Time Remaining</span>
-                                        <span className="font-mono text-sm font-bold text-emerald-400">14h 22m 10s</span>
+                                        <span className="font-mono text-sm font-bold text-emerald-400">{getModalTimeLeft()}</span>
                                     </div>
                                 </div>
                             </div>
@@ -299,12 +379,22 @@ export function MirrorDashboard() {
                                     Cancel
                                 </button>
                                 <button
-                                    onClick={() => setShowRevokeModal(false)}
-                                    className="group relative flex items-center justify-center overflow-hidden rounded-lg bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-neon-danger transition-all hover:bg-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.6)]"
+                                    onClick={confirmRevoke}
+                                    disabled={isRevoking}
+                                    className="group relative flex items-center justify-center overflow-hidden rounded-lg bg-red-600 px-4 py-3 text-sm font-bold text-white shadow-neon-danger transition-all hover:bg-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.6)] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1s_infinite]"></div>
-                                    <span className="material-symbols-outlined mr-2 text-lg">delete_forever</span>
-                                    Confirm Revoke
+                                    {isRevoking ? (
+                                        <span className="flex items-center gap-2">
+                                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            Revoking...
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span className="material-symbols-outlined mr-2 text-lg">delete_forever</span>
+                                            Confirm Revoke
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>

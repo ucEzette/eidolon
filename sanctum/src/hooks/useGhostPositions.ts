@@ -13,6 +13,8 @@ export interface GhostPosition {
     signature: SignedGhostPermit;
     status: 'Active' | 'Expired' | 'Revoked';
     timestamp: number;
+    liquidityMode: 'one-sided' | 'dual-sided';
+    nonce: string; // Storing as string to avoid serialization issues
 }
 
 const STORAGE_KEY = "eidolon_ghost_positions";

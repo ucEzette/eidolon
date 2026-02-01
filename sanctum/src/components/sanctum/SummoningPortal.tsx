@@ -25,6 +25,7 @@ export function SummoningPortal() {
 
     const [liquidityMode, setLiquidityMode] = useState<LiquidityMode>('one-sided');
     const [amount, setAmount] = useState<string>("5.0");
+    const [amountB, setAmountB] = useState<string>("12500"); // Default for demo
     const [validity, setValidity] = useState<number>(3); // Index 0-3
 
     // Hooks
@@ -91,16 +92,18 @@ export function SummoningPortal() {
             );
 
             if (result) {
-                console.log("Permit Signed:", result);
+                console.log("Permit Signed:", result.signature);
 
                 // Save permit to local "Ghost State"
                 addPosition({
                     tokenA: tokenA.symbol,
                     tokenB: tokenB.symbol,
                     amountA: amount,
-                    amountB: "0", // Currently one-sided logic dominates
+                    amountB: liquidityMode === 'dual-sided' ? amountB : "0",
                     expiry: Date.now() + (minutes * 60 * 1000),
-                    signature: result
+                    signature: result.signature,
+                    liquidityMode: liquidityMode,
+                    nonce: result.nonce
                 });
 
                 toast.success("Ghost Permit Summoned!", {
@@ -259,7 +262,8 @@ export function SummoningPortal() {
                                     className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-3xl font-medium placeholder-white/20 p-5 pr-32 caret-purple-400"
                                     placeholder="0.00"
                                     type="text"
-                                    defaultValue="12,500" // Demo visual value
+                                    value={amountB}
+                                    onChange={(e) => setAmountB(e.target.value)}
                                 />
                                 {/* Token Selector Pill */}
                                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
