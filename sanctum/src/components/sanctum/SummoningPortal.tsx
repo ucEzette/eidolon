@@ -103,7 +103,7 @@ export function SummoningPortal() {
                     expiry: Date.now() + (minutes * 60 * 1000),
                     signature: result.signature,
                     liquidityMode: liquidityMode,
-                    nonce: result.nonce
+                    nonce: result.nonce.toString()
                 });
 
                 toast.success("Ghost Permit Summoned!", {
