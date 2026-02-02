@@ -109,7 +109,10 @@ export function SummoningPortal() {
                     liquidityMode: liquidityMode,
                     nonce: result.nonce.toString(),
                     provider: address!, // Address is confirmed by isConnected common check
-                    poolId: poolId
+                    poolId: poolId,
+                    fee: 3000,
+                    tickSpacing: 60,
+                    hookAddress: CONTRACTS.unichainSepolia.eidolonHook
                 });
                 // Fix Vercel build type error (forced update)
 

@@ -17,6 +17,9 @@ export interface GhostPosition {
     nonce: string; // Storing as string to avoid serialization issues
     provider: string; // Address of the signer
     poolId: string; // Pool ID
+    fee: number;
+    tickSpacing: number;
+    hookAddress: string;
     txHash?: string;
 }
 

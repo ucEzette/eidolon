@@ -5,7 +5,8 @@ import {
     http,
     parseEther,
     parseAbiItem,
-    encodeFunctionData
+    encodeFunctionData,
+    encodeAbiParameters
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
@@ -14,7 +15,38 @@ import { GhostPosition } from './monitor';
 
 // ABI for EidolonExecutor
 const EXECUTOR_ABI = [
-    parseAbiItem('function execute(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, tuple(bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData) external payable returns (int256 amount0, int256 amount1)')
+    {
+        name: 'execute',
+        type: 'function',
+        stateMutability: 'payable',
+        inputs: [
+            {
+                name: 'key',
+                type: 'tuple',
+                components: [
+                    { name: 'currency0', type: 'address' },
+                    { name: 'currency1', type: 'address' },
+                    { name: 'fee', type: 'uint24' },
+                    { name: 'tickSpacing', type: 'int24' },
+                    { name: 'hooks', type: 'address' }
+                ]
+            },
+            {
+                name: 'params',
+                type: 'tuple',
+                components: [
+                    { name: 'zeroForOne', type: 'bool' },
+                    { name: 'amountSpecified', type: 'int256' },
+                    { name: 'sqrtPriceLimitX96', type: 'uint160' }
+                ]
+            },
+            { name: 'hookData', type: 'bytes' }
+        ],
+        outputs: [
+            { name: 'amount0', type: 'int256' },
+            { name: 'amount1', type: 'int256' }
+        ]
+    }
 ];
 
 export class Executor {
@@ -99,24 +131,26 @@ export class Executor {
                 ]
             );
 
-            // 3. Prepare Swap Params for Executor
-            // For now, assume simple 1:1 swap logic or arbitary amount
-            // To "execute a trade", we need to swap AGAINST the JIT liquidity provided.
-            // If user provides TokenA, we swap TokenB -> TokenA.
-            // Amount: We take the full amount user provided? Or just enough to fill?
-            // Let's swap the full amount.
+            // 3. Prepare PoolKey
+            // Sort tokens to determine Currency0/1
+            const currency0 = order.tokenA.toLowerCase() < order.tokenB.toLowerCase() ? order.tokenA : order.tokenB;
+            const currency1 = order.tokenA.toLowerCase() < order.tokenB.toLowerCase() ? order.tokenB : order.tokenA;
 
-            const amountSpecified = -BigInt(order.amountA); // Negative = Exact Input? No.
-            // In V4:
-            // negative = exact input (we pay input)
-            // positive = exact output (we receive output)
+            const poolKey = {
+                currency0: currency0 as `0x${string}`,
+                currency1: currency1 as `0x${string}`,
+                fee: order.fee || 3000,
+                tickSpacing: order.tickSpacing || 60,
+                hooks: (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
+            };
 
-            // Assume ZeroForOne logic based on token sort order.
-            // We need proper PoolKey construction here. The backend doesn't have it fully.
-            // For MVP, we need to fetch PoolKey details or recreate them.
-            // Assuming order.poolId matches the key.
+            // 4. Prepare Swap Params for Executor
+            // For Verification Test: We trigger the hook via a Swap.
+            // If input is 0, we sell 0 for 1
+            const zeroForOne = true; // Simplified for now
+            const amountSpecified = -100n; // Swap a tiny amount to trigger hook
 
-            // Just logging for now as we don't have PoolKey details (fee, tickSpacing) in GhostPosition easily without lookup.
+            console.log("   🔑 Pool Key Constructed:", poolKey);
             console.log("   📝 Transaction Data Encoded (Simulated).");
             console.log("   HookData Length:", hookData.length);
 
@@ -127,8 +161,8 @@ export class Executor {
                 abi: EXECUTOR_ABI,
                 functionName: 'execute',
                 args: [
-                    { ...poolKey },
-                    { zeroForOne: true, amountSpecified: -100n, sqrtPriceLimitX96: 0n },
+                    poolKey,
+                    { zeroForOne, amountSpecified, sqrtPriceLimitX96: 0n },
                     hookData
                 ]
             });
