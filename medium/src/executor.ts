@@ -12,9 +12,9 @@ import { sepolia } from 'viem/chains';
 import { CONFIG } from './config';
 import { GhostPosition } from './monitor';
 
-// ABI for EidolonHook's settle function
-const HOOK_ABI = [
-    parseAbiItem('function settle(address token, uint256 amount, bytes32 poolId, (address,address,uint256,bytes32,uint256,uint256,bool) witness, bytes signature) external')
+// ABI for EidolonExecutor
+const EXECUTOR_ABI = [
+    parseAbiItem('function execute(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, tuple(bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData) external payable returns (int256 amount0, int256 amount1)')
 ];
 
 export class Executor {
@@ -38,58 +38,103 @@ export class Executor {
     }
 
     async executeOrder(order: GhostPosition) {
+        if (!process.env.EIDOLON_EXECUTOR) {
+            console.warn("⚠️  EIDOLON_EXECUTOR address not set! Skipping on-chain execution.");
+            return false;
+        }
+
         console.log(`⚡ Executor: Preparing settlement for ${order.id}...`);
 
         try {
-            // 1. Construct Witness Struct
+            // 1. Construct Witness Struct (Must match WitnessLib)
             const witness = {
+                poolId: order.poolId as `0x${string}`,
+                hook: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`
+            };
+
+            // 2. Encode Permit Data
+            // We need to match the decode in Hook._beforeSwap:
+            // (GhostPermit[], bytes[], WitnessLib.WitnessData[])
+
+            // Reconstruct the permit struct
+            const permit = {
                 provider: order.provider as `0x${string}`,
                 currency: order.tokenA as `0x${string}`,
                 amount: BigInt(order.amountA),
-                poolId: order.poolId as `0x${string}`,
+                poolId: order.poolId as `0x${string}`, // Added poolId field
                 deadline: BigInt(Math.floor(order.expiry / 1000)),
                 nonce: BigInt(order.nonce),
                 isDualSided: order.liquidityMode === 'dual-sided'
             };
 
-            // 2. Prepare Transaction Data
-            // Note: This is a simplified "settle" call. 
-            // In reality, we'd bundle a SWAP + SETTLE.
-            // For this demo, we can just call settle() to prove we can verify the permit on-chain.
+            const hookData = encodeAbiParameters(
+                [
+                    {
+                        components: [
+                            { name: 'provider', type: 'address' },
+                            { name: 'currency', type: 'address' },
+                            { name: 'amount', type: 'uint256' },
+                            { name: 'poolId', type: 'bytes32' },
+                            { name: 'deadline', type: 'uint256' },
+                            { name: 'nonce', type: 'uint256' },
+                            { name: 'isDualSided', type: 'bool' }
+                        ],
+                        name: 'permits',
+                        type: 'tuple[]'
+                    },
+                    { name: 'signatures', type: 'bytes[]' },
+                    {
+                        components: [
+                            { name: 'poolId', type: 'bytes32' },
+                            { name: 'hook', type: 'address' }
+                        ],
+                        name: 'witnesses',
+                        type: 'tuple[]'
+                    }
+                ],
+                [
+                    [permit],
+                    [order.signature as `0x${string}`],
+                    [witness]
+                ]
+            );
 
-            const data = encodeFunctionData({
-                abi: HOOK_ABI,
-                functionName: 'settle',
+            // 3. Prepare Swap Params for Executor
+            // For now, assume simple 1:1 swap logic or arbitary amount
+            // To "execute a trade", we need to swap AGAINST the JIT liquidity provided.
+            // If user provides TokenA, we swap TokenB -> TokenA.
+            // Amount: We take the full amount user provided? Or just enough to fill?
+            // Let's swap the full amount.
+
+            const amountSpecified = -BigInt(order.amountA); // Negative = Exact Input? No.
+            // In V4:
+            // negative = exact input (we pay input)
+            // positive = exact output (we receive output)
+
+            // Assume ZeroForOne logic based on token sort order.
+            // We need proper PoolKey construction here. The backend doesn't have it fully.
+            // For MVP, we need to fetch PoolKey details or recreate them.
+            // Assuming order.poolId matches the key.
+
+            // Just logging for now as we don't have PoolKey details (fee, tickSpacing) in GhostPosition easily without lookup.
+            console.log("   📝 Transaction Data Encoded (Simulated).");
+            console.log("   HookData Length:", hookData.length);
+
+            // REAL TRANSACTION (Uncomment when Executor employed)
+            /*
+            const hash = await this.wallet.writeContract({
+                address: CONFIG.CONTRACTS.EIDOLON_EXECUTOR as `0x${string}`,
+                abi: EXECUTOR_ABI,
+                functionName: 'execute',
                 args: [
-                    order.tokenA as `0x${string}`, // Currency
-                    BigInt(order.amountA),         // Amount
-                    order.poolId as `0x${string}`, // PoolKey
-                    [
-                        witness.provider,
-                        witness.currency,
-                        witness.amount,
-                        witness.poolId,
-                        witness.deadline,
-                        witness.nonce,
-                        witness.isDualSided
-                    ], // Witness Tuple
-                    order.signature as `0x${string}` // Signature
+                    { ...poolKey },
+                    { zeroForOne: true, amountSpecified: -100n, sqrtPriceLimitX96: 0n },
+                    hookData
                 ]
             });
+            console.log(`   🚀 Transaction Submitted: ${hash}`);
+            */
 
-            console.log("   📝 Transaction Data Encoded for 'settle' call.");
-
-            // SIMULATION & SUBMISSION LOGIC
-            // In a real environment, we would use flashbots provider here.
-
-            // const hash = await this.wallet.sendTransaction({
-            //     to: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`,
-            //     data,
-            //     value: 0n
-            // });
-            // console.log(`   🚀 Transaction Submitted: ${hash}`);
-
-            console.log("   (Simulation Completed: Transaction Encoding Verified)");
             return true;
 
         } catch (error) {
