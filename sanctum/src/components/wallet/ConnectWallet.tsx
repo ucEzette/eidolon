@@ -45,7 +45,7 @@ export function ConnectWallet() {
 
   // Resolution: ENS Name (Mainnet)
   const { data: ensName } = useEnsName({
-    address: address,
+    address: address || undefined,
     chainId: 1, // Always query ENS on Mainnet
   });
 
