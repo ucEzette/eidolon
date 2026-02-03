@@ -1,264 +1,359 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { TOKENS, TOKEN_MAP, type Token } from "@/config/tokens";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS } from "@/config/web3";
 import { toast } from "sonner";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract, useReadContract, useReadContracts } from "wagmi";
 import { getPoolId, getSqrtPriceX96 } from "@/utils/uniswap";
-import { parseAbi } from "viem";
+import { parseAbi, encodeAbiParameters, keccak256, hexToBigInt } from "viem";
 
 const POOL_MANAGER_ABI = parseAbi([
-    "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96, bytes hookData) external payable returns (int24 tick)"
+    "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
+    "function extsload(bytes32 slot) external view returns (bytes32 value)"
 ]);
 
-// Mock list of "Official" Pools
-const OFFICIAL_POOLS = [
-    { tokenA: "ETH", tokenB: "USDC", fee: 3000, label: "Standard (0.3%)" },
-    { tokenA: "ETH", tokenB: "USDC", fee: 500, label: "Stable (0.05%)" },
-];
+// Helper to calculate storage slot for _pools[poolId] (Slot 6)
+const POOL_STORAGE_SLOT = 6n;
+function getPoolStateSlot(poolId: `0x${string}`) {
+    return keccak256(encodeAbiParameters(
+        [{ type: 'bytes32' }, { type: 'uint256' }],
+        [poolId, POOL_STORAGE_SLOT]
+    ));
+}
+
+function getTokenByAddress(address: string): Token | undefined {
+    return TOKENS.find(t => t.address.toLowerCase() === address.toLowerCase());
+}
+
+function sqrtPriceToPrice(sqrtPriceX96: bigint, decimals0: number, decimals1: number): string {
+    const priceX96 = sqrtPriceX96 * sqrtPriceX96;
+    const shift = 1n << 192n;
+    const PRICE_PRECISION = 1000000n;
+    const numerator = priceX96 * PRICE_PRECISION;
+    const ratio = numerator / shift;
+
+    // Adjust for decimals: Ratio * 10^(d0 - d1)
+    const decimalDiff = BigInt(decimals0 - decimals1);
+    let adjusted = ratio;
+    if (decimalDiff > 0n) {
+        adjusted = ratio * (10n ** decimalDiff);
+    } else if (decimalDiff < 0n) {
+        adjusted = ratio / (10n ** (-decimalDiff));
+    }
+
+    return (Number(adjusted) / Number(PRICE_PRECISION)).toFixed(2);
+}
 
 export function PoolManager() {
-    const [isTokenAOpen, setIsTokenAOpen] = useState(false);
-    const [isTokenBOpen, setIsTokenBOpen] = useState(false);
+    const { address } = useAccount();
+    const [price, setPrice] = useState<string>("3000"); // Default ETH price
+    const { writeContractAsync } = useWriteContract();
+    const [isExpanded, setIsExpanded] = useState(false); // Collapsible state for table
 
-    // Default: ETH (Native) + USDC
-    const [tokenA, setTokenA] = useState<Token>(TOKEN_MAP["ETH"]);
-    const [tokenB, setTokenB] = useState<Token>(TOKEN_MAP["USDC"]);
+    // Selector State
+    const [selectorType, setSelectorType] = useState<'token0' | 'token1' | null>(null);
 
-    const [feeTier, setFeeTier] = useState<number>(3000);
-    const [initialPrice, setInitialPrice] = useState<string>("3000"); // USDC per ETH
+    // Configuration
+    const [poolConfig, setPoolConfig] = useState({
+        token0: "0x0000000000000000000000000000000000000000", // ETH (Native)
+        token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+    });
 
-    const { isConnected } = useAccount();
-    const { writeContractAsync, isPending } = useWriteContract();
+    const poolId = useMemo(() => {
+        return getPoolId(
+            poolConfig.token0 as `0x${string}`,
+            poolConfig.token1 as `0x${string}`,
+            poolConfig.fee,
+            poolConfig.tickSpacing,
+            poolConfig.hooks as `0x${string}`
+        );
+    }, [poolConfig]);
+
+    const poolStateSlot = useMemo(() => getPoolStateSlot(poolId), [poolId]);
+
+    // Check if pool exists by reading storage
+    const { data: poolStateData, refetch: refetchPool } = useReadContract({
+        address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
+        abi: POOL_MANAGER_ABI,
+        functionName: "extsload",
+        args: [poolStateSlot],
+    });
+
+    const isPoolInitialized = useMemo(() => {
+        if (!poolStateData) return false;
+        return hexToBigInt(poolStateData) !== 0n;
+    }, [poolStateData]);
+
+    // Also get list of Official Pools to display status
+    const officialPoolKeys = [
+        {
+            token0: "0x0000000000000000000000000000000000000000", // ETH
+            token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
+            fee: 3000,
+            tickSpacing: 60,
+            hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+        }
+    ];
+
+    const officialPoolQueries = officialPoolKeys.map(pk => {
+        const pid = getPoolId(pk.token0 as `0x${string}`, pk.token1 as `0x${string}`, pk.fee, pk.tickSpacing, pk.hooks as `0x${string}`);
+        const slot = getPoolStateSlot(pid);
+        return {
+            address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
+            abi: POOL_MANAGER_ABI,
+            functionName: "extsload",
+            args: [slot]
+        } as const;
+    });
+
+    const { data: officialPoolsStatus } = useReadContracts({
+        contracts: officialPoolQueries
+    });
 
     const handleInitialize = async () => {
-        if (!isConnected) {
-            toast.error("Please connect wallet");
+        if (!price || isNaN(Number(price))) {
+            toast.error("Invalid price");
             return;
         }
 
         try {
-            // 1. Force Native ETH Logic
-            // The Bot expects Native ETH (0x0...0). If user selected "WETH", swap it to "ETH" implicitly or warn?
-            // Better: Swap the internal value used for initialization to Native ETH if it's WETH, or just ensure default is ETH.
-            // If user explicitly picked WETH, they might want WETH pool. 
-            // BUT for the "Fix Mismatch" goal, we want them to create the Native Pool.
+            const sqrtPriceX96 = getSqrtPriceX96(
+                Number(price),
+                poolConfig.token0 as `0x${string}`,
+                poolConfig.token1 as `0x${string}`
+            );
 
-            let currency0 = tokenA.address;
-            let currency1 = tokenB.address;
+            // Construct Key
+            const [c0, c1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+                ? [poolConfig.token0, poolConfig.token1]
+                : [poolConfig.token1, poolConfig.token0];
 
-            // Auto-fix: If one token is WETH, use ETH address instead for this specific 'Sanctum' Pool
-            // because our bot logic hardcodes Native ETH for gas efficiency/handling.
-            if (currency0 === TOKEN_MAP["WETH"].address) currency0 = TOKEN_MAP["ETH"].address;
-            if (currency1 === TOKEN_MAP["WETH"].address) currency1 = TOKEN_MAP["ETH"].address;
-
-            // 2. Sort Currencies (Uniswap Requirement)
-            const [token0, token1] = currency0.toLowerCase() < currency1.toLowerCase()
-                ? [currency0, currency1]
-                : [currency1, currency0]; // Sorted
-
-            // 3. Calculate SqrtPriceX96
-            // We need to know which token is token0 to interpret the "Price".
-            // User entered "Price of TokenB in terms of TokenA" (e.g. 3000 USDC per 1 ETH).
-            // Usually UI assumes Base/Quote. Let's assume TokenA is Base, TokenB is Quote.
-            // Price = TokenB / TokenA.
-
-            // If TokenA (Base) became Token0: Price0 = amount1/amount0 = Price.
-            // If TokenA (Base) became Token1: Price0 = amount1/amount0 = 1/Price.
-
-            // Example: ETH (0) / USDC (1). TokenA=ETH.
-            // Sorted: ETH (0), USDC (1).
-            // TokenA is Token0. 
-            // We want Price of ETH in USDC = 3000. 
-            // Price0 = USDC / ETH = 3000. Correct.
-
-            // Example: USDC (0) / ETH (1). (Hypothetically if USDC address < ETH address, which isn't true for 0x0...0)
-
-            let priceVal = parseFloat(initialPrice);
-            if (isNaN(priceVal) || priceVal <= 0) throw new Error("Invalid Price");
-
-            // Adjust price if sorting flipped the pair relative to UI expectation
-            if (tokenA.address.toLowerCase() !== token0.toLowerCase()) {
-                // Formatting: User explicitly checks "Initial Price (USDC per ETH)". 
-                // If TokenA=USDC, TokenB=ETH.
-                // UI Label says: Price (ETH per USDC)? 
-                // Let's rely on the label: "Initial Price ({tokenB} per {tokenA})"
-
-                // If User inputs 3000 USDC per ETH.
-                // TokenA = ETH, TokenB = USDC.
-                // Sorted: Token0=ETH, Token1=USDC.
-                // We need Price (Token1/Token0) = 3000. 
-
-                // Logic check:
-                // getSqrtPriceX96 takes (price, decimals0, decimals1).
-                // It expects Price = Token1/Token0.
-
-                // If TokenA == Token0, then UI Price (B per A) IS (1 per 0). Correct.
-                // If TokenA == Token1, then UI Price (B per A) IS (0 per 1). Inverted.
-
-                // If TokenA != Token0, it means TokenA is Token1. 
-                // Price input is (Token0 per Token1).
-                // We need (Token1 per Token0).
-                priceVal = 1 / priceVal;
-            }
-
-            const token0Decimals = token0.toLowerCase() === tokenA.address.toLowerCase() ? tokenA.decimals : tokenB.decimals;
-            const token1Decimals = token1.toLowerCase() === tokenA.address.toLowerCase() ? tokenA.decimals : tokenB.decimals;
-
-            const sqrtPriceX96 = getSqrtPriceX96(priceVal, token0Decimals, token1Decimals);
-
-            // 4. Construct PoolKey
-            const poolKey = {
-                currency0: token0,
-                currency1: token1,
-                fee: feeTier,
-                tickSpacing: 60,
-                hooks: CONTRACTS.unichainSepolia.eidolonHook
+            const key = {
+                currency0: c0 as `0x${string}`,
+                currency1: c1 as `0x${string}`,
+                fee: poolConfig.fee,
+                tickSpacing: poolConfig.tickSpacing,
+                hooks: poolConfig.hooks as `0x${string}`
             };
 
-            console.log("Initializing Pool:", { poolKey, sqrtPriceX96: sqrtPriceX96.toString() });
-
-            // 5. Execute Transaction
-            const hash = await writeContractAsync({
-                address: CONTRACTS.unichainSepolia.poolManager,
+            const tx = await writeContractAsync({
+                address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
                 abi: POOL_MANAGER_ABI,
-                functionName: 'initialize',
-                args: [
-                    poolKey,
-                    sqrtPriceX96,
-                    "0x" // No hook data needed for initialization in standard case? Or empty bytes.
-                ],
-                value: 0n // Initialization doesn't require sending ETH usually unless minting? V4 init is pure state.
+                functionName: "initialize",
+                args: [key, sqrtPriceX96],
             });
 
-            toast.success("Transaction Sent!", {
-                description: "Initializing Unichain Pool...",
-                action: {
-                    label: "View",
-                    onClick: () => window.open(`https://sepolia.uniscan.xyz/tx/${hash}`, '_blank')
-                }
-            });
+            toast.success("Transaction Sent", { description: "Initializing Pool..." });
+            setTimeout(() => { refetchPool(); }, 5000);
 
-        } catch (err: any) {
-            console.error(err);
-            toast.error("Initialization Failed", {
-                description: err.message || "Unknown error"
-            });
+        } catch (e: any) {
+            console.error(e);
+            toast.error("Initialization Failed", { description: e.shortMessage || e.message || "Unknown error" });
         }
     };
 
+    const token0 = getTokenByAddress(poolConfig.token0);
+    const token1 = getTokenByAddress(poolConfig.token1);
+
     return (
-        <div className="w-full h-full bg-void border border-white/5 p-1 relative overflow-hidden animate-fade-in-up delay-100 flex flex-col">
-            <div className="bg-black/40 p-6 relative backdrop-blur-md flex-1">
-                <h2 className="text-xl font-display font-bold text-white mb-6 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-phantom-cyan">water_drop</span>
-                    Sanctum Pools
-                </h2>
+        <div className="card w-full bg-base-200 shadow-xl mt-8 border border-base-300">
+            <TokenSelector
+                isOpen={!!selectorType}
+                onClose={() => setSelectorType(null)}
+                onSelect={(t) => {
+                    if (selectorType === 'token0') setPoolConfig({ ...poolConfig, token0: t.address });
+                    if (selectorType === 'token1') setPoolConfig({ ...poolConfig, token1: t.address });
+                    setSelectorType(null);
+                }}
+            />
 
-                {/* Existing Pools List */}
-                <div className="space-y-3 mb-8">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Verified Pools</h3>
-                    {OFFICIAL_POOLS.map((pool, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:border-phantom-cyan/30 transition-colors">
-                            <div className="flex items-center gap-3">
-                                <div className="flex -space-x-2">
-                                    <div className="h-6 w-6 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-bold text-white border border-black">{pool.tokenA}</div>
-                                    <div className="h-6 w-6 rounded-full bg-slate-700 flex items-center justify-center text-[8px] font-bold text-white border border-black">{pool.tokenB}</div>
-                                </div>
-                                <div>
-                                    <div className="text-sm font-bold text-white flex items-center gap-2">
-                                        {pool.tokenA}/{pool.tokenB}
-                                        <span className="text-[10px] bg-slate-800 px-1.5 rounded text-slate-400">{pool.fee / 10000}%</span>
-                                    </div>
-                                    <div className="text-[10px] text-phantom-cyan flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[10px]">webhook</span>
-                                        Eidolon Hook
-                                    </div>
-                                </div>
-                            </div>
-                            <button className="text-xs font-medium text-slate-400 hover:text-white px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors">
-                                View
-                            </button>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Create Pool Section */}
-                <div className="space-y-4 pt-6 border-t border-white/10">
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center justify-between">
-                        Initialize New Pool
-                        <span className="text-[10px] text-slate-600 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">Advanced</span>
-                    </h3>
-
-                    {/* Token Selection */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setIsTokenAOpen(true)} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg hover:border-white/30 transition-all">
-                            <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-bold">{tokenA.symbol[0]}</div>
-                                <span className="font-mono font-bold">{tokenA.symbol}</span>
-                            </div>
-                            <span className="material-symbols-outlined text-slate-500">expand_more</span>
-                        </button>
-                        <button onClick={() => setIsTokenBOpen(true)} className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-lg hover:border-white/30 transition-all">
-                            <div className="flex items-center gap-2">
-                                <div className="h-6 w-6 rounded-full bg-cyan-500 flex items-center justify-center text-[10px] font-bold">{tokenB.symbol[0]}</div>
-                                <span className="font-mono font-bold">{tokenB.symbol}</span>
-                            </div>
-                            <span className="material-symbols-outlined text-slate-500">expand_more</span>
-                        </button>
-                    </div>
-
-                    {/* Fee Tier Selection */}
-                    <div className="grid grid-cols-3 gap-2">
-                        {[500, 3000, 10000].map((fee) => (
-                            <button
-                                key={fee}
-                                onClick={() => setFeeTier(fee)}
-                                className={`py-2 text-xs font-mono font-bold rounded border transition-all ${feeTier === fee
-                                    ? 'bg-phantom-cyan/20 border-phantom-cyan text-phantom-cyan'
-                                    : 'bg-transparent border-white/10 text-slate-500 hover:text-white'
-                                    }`}
-                            >
-                                {fee / 10000}%
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Initial Price */}
-                    <div className="space-y-1">
-                        <label className="text-xs text-slate-500 font-medium ml-1">Initial Price ({tokenB.symbol} per {tokenA.symbol})</label>
-                        <div className="relative group/input">
-                            <input
-                                type="text"
-                                value={initialPrice}
-                                onChange={(e) => setInitialPrice(e.target.value)}
-                                className="w-full bg-black/50 border border-white/10 rounded-lg p-3 font-mono text-sm text-white focus:border-phantom-cyan focus:outline-none transition-colors"
-                            />
-                        </div>
-                    </div>
-
+            <div className="card-body p-6">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="card-title text-2xl">Pool Manager</h2>
                     <button
-                        onClick={handleInitialize}
-                        disabled={isPending}
-                        className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-bold text-white uppercase tracking-wider hover:border-phantom-cyan/50 hover:text-phantom-cyan transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => setIsExpanded(!isExpanded)}
                     >
-                        {isPending ? 'Initializing...' : 'Initialize Pool'}
+                        {isExpanded ? "Hide Pools" : "Show Pools"}
                     </button>
                 </div>
-            </div>
 
-            <TokenSelector
-                isOpen={isTokenAOpen}
-                onClose={() => setIsTokenAOpen(false)}
-                onSelect={(t) => { setTokenA(t); setIsTokenAOpen(false); }}
-            />
-            <TokenSelector
-                isOpen={isTokenBOpen}
-                onClose={() => setIsTokenBOpen(false)}
-                onSelect={(t) => { setTokenB(t); setIsTokenBOpen(false); }}
-            />
+                {/* Official Pools List - Collapsible */}
+                {isExpanded && (
+                    <div className="overflow-x-auto mb-8 bg-base-100 rounded-lg p-2">
+                        <table className="table table-zebra w-full">
+                            <thead>
+                                <tr>
+                                    <th>Pair</th>
+                                    <th>Fee</th>
+                                    <th>Hooks</th>
+                                    <th>Status</th>
+                                    <th className="text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {officialPoolKeys.map((pool, i) => {
+                                    const status = officialPoolsStatus?.[i];
+                                    const rawValue = (status && status.status === "success") ? status.result : "0x00";
+                                    const isLive = hexToBigInt(rawValue as `0x${string}`) !== 0n;
+
+                                    const t0 = getTokenByAddress(pool.token0);
+                                    const t1 = getTokenByAddress(pool.token1);
+
+                                    let displayPrice = "-";
+                                    if (isLive) {
+                                        const val = hexToBigInt(rawValue as `0x${string}`);
+                                        const sqrtP = val & ((1n << 160n) - 1n);
+                                        displayPrice = sqrtPriceToPrice(sqrtP, 18, 6);
+                                    }
+
+                                    const isSelected = pool.token0.toLowerCase() === poolConfig.token0.toLowerCase() &&
+                                        pool.token1.toLowerCase() === poolConfig.token1.toLowerCase() &&
+                                        pool.fee === poolConfig.fee;
+
+                                    return (
+                                        <tr key={i} className={isSelected ? "bg-primary/20" : ""}>
+                                            <td>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="avatar-group -space-x-4">
+                                                        <div className="avatar w-8 h-8 ring-0">
+                                                            {t0?.logo ? <img src={t0.logo} alt="T0" /> : <div className="bg-neutral text-neutral-content rounded-full w-8"></div>}
+                                                        </div>
+                                                        <div className="avatar w-8 h-8 ring-0">
+                                                            {t1?.logo ? <img src={t1.logo} alt="T1" /> : <div className="bg-neutral text-neutral-content rounded-full w-8"></div>}
+                                                        </div>
+                                                    </div>
+                                                    <span className="font-bold">{t0?.symbol}/{t1?.symbol}</span>
+                                                </div>
+                                            </td>
+                                            <td>{(pool.fee / 10000).toFixed(2)}%</td>
+                                            <td>
+                                                <div className="tooltip" data-tip={pool.hooks}>
+                                                    <span className="badge badge-ghost font-mono text-xs cursor-help">
+                                                        {pool.hooks.slice(0, 6)}...{pool.hooks.slice(-4)}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                {isLive ? (
+                                                    <div className="badge badge-success badge-sm gap-2">
+                                                        Active
+                                                        <span className="text-xs opacity-75 hidden sm:inline">(${displayPrice})</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="badge badge-error badge-sm">Uninitialized</div>
+                                                )}
+                                            </td>
+                                            <td className="text-right">
+                                                <button
+                                                    className={`btn btn-xs ${isSelected ? "btn-disabled btn-primary" : "btn-outline"}`}
+                                                    onClick={() => setPoolConfig(pool)}
+                                                >
+                                                    {isSelected ? "Selected" : "Select"}
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                <div className="divider">Initialize Pool</div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Left Column: Token Selection */}
+                    <div className="card bg-base-100 p-4 rounded-box">
+                        <label className="label font-bold text-lg">Pair Configuration</label>
+                        <div className="flex flex-col gap-4">
+
+                            {/* Token 0 */}
+                            <div className="form-control">
+                                <label className="label"><span className="label-text">Base Token</span></label>
+                                <button
+                                    className="btn btn-outline flex justify-between items-center"
+                                    onClick={() => setSelectorType('token0')}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {token0?.logo && <img src={token0.logo} className="w-6 h-6 rounded-full" />}
+                                        <span>{token0?.symbol || "Select Token"}</span>
+                                    </div>
+                                    <span className="material-symbols-outlined">expand_more</span>
+                                </button>
+                            </div>
+
+                            {/* Token 1 */}
+                            <div className="form-control">
+                                <label className="label"><span className="label-text">Quote Token</span></label>
+                                <button
+                                    className="btn btn-outline flex justify-between items-center"
+                                    onClick={() => setSelectorType('token1')}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        {token1?.logo && <img src={token1.logo} className="w-6 h-6 rounded-full" />}
+                                        <span>{token1?.symbol || "Select Token"}</span>
+                                    </div>
+                                    <span className="material-symbols-outlined">expand_more</span>
+                                </button>
+                            </div>
+
+                            <div className="form-control mt-2">
+                                <label className="label cursor-pointer justify-start gap-4 p-0">
+                                    <span className="label-text font-bold">Hook Address</span>
+                                    <span className="font-mono text-xs bg-base-200 p-2 rounded block whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
+                                        {poolConfig.hooks}
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Column: Pricing & Action */}
+                    <div className="card bg-base-100 p-4 rounded-box">
+                        <label className="label font-bold text-lg">Initialization</label>
+                        <div className="flex flex-col gap-6 h-full">
+                            <div className="form-control">
+                                <label className="label">
+                                    <span className="label-text">Initial Price (USDC per ETH)</span>
+                                </label>
+                                <div className="join w-full">
+                                    <input
+                                        type="text"
+                                        placeholder="3000"
+                                        className="input input-bordered join-item w-full"
+                                        value={price}
+                                        onChange={(e) => setPrice(e.target.value)}
+                                        disabled={isPoolInitialized}
+                                    />
+                                    <span className="btn btn-static join-item bg-base-200">USDC</span>
+                                </div>
+                                <label className="label">
+                                    <span className="label-text-alt">
+                                        Status:
+                                        <span className={`ml-2 font-bold ${isPoolInitialized ? "text-success" : "text-error"}`}>
+                                            {isPoolInitialized ? "ACTIVE" : "UNINITIALIZED"}
+                                        </span>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <button
+                                className={`btn w-full mt-auto ${isPoolInitialized ? "btn-success btn-outline" : "btn-primary"}`}
+                                onClick={handleInitialize}
+                                disabled={isPoolInitialized}
+                            >
+                                {isPoolInitialized ? "Pool Already Initialized" : "Initialize Pool"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

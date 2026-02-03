@@ -233,5 +233,23 @@
     "id": "cbc88ecb-2ac6-43bb-a7d1-d70a88e49d5c",
     "timestamp": 1770122493319,
     "status": "Active"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "WETH",
+    "amountA": "0.1",
+    "amountB": "0.1",
+    "expiry": 1772726376958,
+    "signature": "0x77241159b47c79d21362b3674e5aa23d2ca4fafcfb652a5ea3afa57fc0be984b3402ca05eda2496dac747970a0410e01e580e38d6496465b2d84fc14f38697021c",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770134359002",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0xeb0a8cee2bbfabf84d73c86a517adc63ef6bb29b80af06deb885a9140920ba03",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
+    "id": "51fa8c03-f492-4aea-ba64-90de5b4288f0",
+    "timestamp": 1770134376959,
+    "status": "Active"
   }
 ]
