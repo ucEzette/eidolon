@@ -145,29 +145,37 @@ export class Executor {
             };
 
             // 4. Prepare Swap Params for Executor
-            // For Verification Test: We trigger the hook via a Swap.
-            // If input is 0, we sell 0 for 1
-            const zeroForOne = true; // Simplified for now
+            // Determine swap direction: selling tokenA
+            const zeroForOne = order.tokenA.toLowerCase() === currency0.toLowerCase();
             const amountSpecified = -parseEther(order.amountA.toString()); // Negative = Exact Input
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
-            console.log("   📝 Transaction Data Encoded (Simulated).");
+            console.log("   📝 Transaction Data Encoded.");
             console.log("   HookData Length:", hookData.length);
+            console.log(`   🔄 Swap Direction: ${zeroForOne ? "ZeroForOne" : "OneForZero"} (Selling ${order.tokenA})`);
 
-            // REAL TRANSACTION (Uncomment when Executor employed)
-            /*
+            // REAL TRANSACTION
             const hash = await this.wallet.writeContract({
                 address: CONFIG.CONTRACTS.EIDOLON_EXECUTOR as `0x${string}`,
                 abi: EXECUTOR_ABI,
                 functionName: 'execute',
                 args: [
                     poolKey,
-                    { zeroForOne: true, amountSpecified: -100n, sqrtPriceLimitX96: 0n },
+                    // valid SwapParams: zeroForOne, amountSpecified, sqrtPriceLimitX96
+                    {
+                        zeroForOne,
+                        amountSpecified: BigInt(amountSpecified),
+                        sqrtPriceLimitX96: zeroForOne ? 4295128739n : 1461446703485210103287273052203988822378723970342n
+                        // MIN_SQRT_RATIO + 1 OR MAX_SQRT_RATIO - 1 depending on direction. 
+                        // Uniswap V4 creates limits. 
+                        // Safe default: 0 for now (Viem might need explicit BigInt if not 0)
+                        // Actually better to use 0 if supported implies "no limit" in some contexts, but V4 usually requires valid limits.
+                        // Let's use 0n for now as per previous commented code, assuming it's handled or we verify V4 limits.
+                    },
                     hookData
                 ]
             });
             console.log(`   🚀 Transaction Submitted: ${hash}`);
-            */
 
             return true;
 
