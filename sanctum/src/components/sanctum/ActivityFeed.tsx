@@ -46,18 +46,12 @@ export function ActivityFeed() {
                     </div>
                 ) : (
                     events.map((event) => (
-                        <div key={event.id} className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
-                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${event.status === 'confirmed' ? 'bg-cyan-500/50' : event.status === 'failed' ? 'bg-red-500/50' : 'bg-yellow-500/50'}`}></div>
+                        <div key={event.hash} className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 bg-cyan-500/50`}></div>
                             <div className="shrink-0 pt-1">
-                                <div className={`h-10 w-10 rounded-full flex items-center justify-center border ${event.status === 'confirmed' ? 'bg-cyan-500/10 border-cyan-500/20' :
-                                    event.status === 'failed' ? 'bg-red-500/10 border-red-500/20' :
-                                        'bg-yellow-500/10 border-yellow-500/20'
-                                    }`}>
-                                    <span className={`material-symbols-outlined text-sm ${event.status === 'confirmed' ? 'text-cyan-400' :
-                                        event.status === 'failed' ? 'text-red-500' :
-                                            'text-yellow-400 animate-spin'
-                                        }`}>
-                                        {event.status === 'confirmed' ? 'check_circle' : event.status === 'failed' ? 'error' : 'progress_activity'}
+                                <div className={`h-10 w-10 rounded-full flex items-center justify-center border bg-cyan-500/10 border-cyan-500/20`}>
+                                    <span className={`material-symbols-outlined text-sm text-cyan-400`}>
+                                        check_circle
                                     </span>
                                 </div>
                             </div>
@@ -69,12 +63,12 @@ export function ActivityFeed() {
                                     </span>
                                 </div>
                                 <p className="text-gray-400 text-xs leading-relaxed mb-2">
-                                    {event.details || "Protocol interaction detected."}
+                                    {event.description || "Protocol interaction detected."}
                                 </p>
-                                {event.txHash && (
+                                {event.hash && (
                                     <div className="flex justify-end">
                                         <a
-                                            href={`https://unichain-sepolia.blockscout.com/tx/${event.txHash}`}
+                                            href={`https://sepolia.uniscan.xyz/tx/${event.hash}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-white transition-colors group/link"

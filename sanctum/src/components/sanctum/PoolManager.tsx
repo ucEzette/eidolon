@@ -6,7 +6,12 @@ import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS } from "@/config/web3";
 import { toast } from "sonner";
 import { useAccount, useWriteContract } from "wagmi";
-import { getPoolId } from "@/utils/uniswap";
+import { getPoolId, getSqrtPriceX96 } from "@/utils/uniswap";
+import { parseAbi } from "viem";
+
+const POOL_MANAGER_ABI = parseAbi([
+    "function initialize(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96, bytes hookData) external payable returns (int24 tick)"
+]);
 
 // Mock list of "Official" Pools
 const OFFICIAL_POOLS = [
@@ -17,12 +22,16 @@ const OFFICIAL_POOLS = [
 export function PoolManager() {
     const [isTokenAOpen, setIsTokenAOpen] = useState(false);
     const [isTokenBOpen, setIsTokenBOpen] = useState(false);
+
+    // Default: ETH (Native) + USDC
     const [tokenA, setTokenA] = useState<Token>(TOKEN_MAP["ETH"]);
     const [tokenB, setTokenB] = useState<Token>(TOKEN_MAP["USDC"]);
+
     const [feeTier, setFeeTier] = useState<number>(3000);
     const [initialPrice, setInitialPrice] = useState<string>("3000"); // USDC per ETH
 
     const { isConnected } = useAccount();
+    const { writeContractAsync, isPending } = useWriteContract();
 
     const handleInitialize = async () => {
         if (!isConnected) {
@@ -30,15 +39,114 @@ export function PoolManager() {
             return;
         }
 
-        toast.promise(new Promise(resolve => setTimeout(resolve, 2000)), {
-            loading: 'Initializing Pool...',
-            success: 'Pool Initialized! (Mock)',
-            error: 'Failed to initialize'
-        });
+        try {
+            // 1. Force Native ETH Logic
+            // The Bot expects Native ETH (0x0...0). If user selected "WETH", swap it to "ETH" implicitly or warn?
+            // Better: Swap the internal value used for initialization to Native ETH if it's WETH, or just ensure default is ETH.
+            // If user explicitly picked WETH, they might want WETH pool. 
+            // BUT for the "Fix Mismatch" goal, we want them to create the Native Pool.
 
-        // TODO: Implement actual V4 initialization call
-        // 1. Calculate SqrtPriceX96 from initialPrice
-        // 2. Call PositionManager.initializePool(key, sqrtPriceX96)
+            let currency0 = tokenA.address;
+            let currency1 = tokenB.address;
+
+            // Auto-fix: If one token is WETH, use ETH address instead for this specific 'Sanctum' Pool
+            // because our bot logic hardcodes Native ETH for gas efficiency/handling.
+            if (currency0 === TOKEN_MAP["WETH"].address) currency0 = TOKEN_MAP["ETH"].address;
+            if (currency1 === TOKEN_MAP["WETH"].address) currency1 = TOKEN_MAP["ETH"].address;
+
+            // 2. Sort Currencies (Uniswap Requirement)
+            const [token0, token1] = currency0.toLowerCase() < currency1.toLowerCase()
+                ? [currency0, currency1]
+                : [currency1, currency0]; // Sorted
+
+            // 3. Calculate SqrtPriceX96
+            // We need to know which token is token0 to interpret the "Price".
+            // User entered "Price of TokenB in terms of TokenA" (e.g. 3000 USDC per 1 ETH).
+            // Usually UI assumes Base/Quote. Let's assume TokenA is Base, TokenB is Quote.
+            // Price = TokenB / TokenA.
+
+            // If TokenA (Base) became Token0: Price0 = amount1/amount0 = Price.
+            // If TokenA (Base) became Token1: Price0 = amount1/amount0 = 1/Price.
+
+            // Example: ETH (0) / USDC (1). TokenA=ETH.
+            // Sorted: ETH (0), USDC (1).
+            // TokenA is Token0. 
+            // We want Price of ETH in USDC = 3000. 
+            // Price0 = USDC / ETH = 3000. Correct.
+
+            // Example: USDC (0) / ETH (1). (Hypothetically if USDC address < ETH address, which isn't true for 0x0...0)
+
+            let priceVal = parseFloat(initialPrice);
+            if (isNaN(priceVal) || priceVal <= 0) throw new Error("Invalid Price");
+
+            // Adjust price if sorting flipped the pair relative to UI expectation
+            if (tokenA.address.toLowerCase() !== token0.toLowerCase()) {
+                // Formatting: User explicitly checks "Initial Price (USDC per ETH)". 
+                // If TokenA=USDC, TokenB=ETH.
+                // UI Label says: Price (ETH per USDC)? 
+                // Let's rely on the label: "Initial Price ({tokenB} per {tokenA})"
+
+                // If User inputs 3000 USDC per ETH.
+                // TokenA = ETH, TokenB = USDC.
+                // Sorted: Token0=ETH, Token1=USDC.
+                // We need Price (Token1/Token0) = 3000. 
+
+                // Logic check:
+                // getSqrtPriceX96 takes (price, decimals0, decimals1).
+                // It expects Price = Token1/Token0.
+
+                // If TokenA == Token0, then UI Price (B per A) IS (1 per 0). Correct.
+                // If TokenA == Token1, then UI Price (B per A) IS (0 per 1). Inverted.
+
+                // If TokenA != Token0, it means TokenA is Token1. 
+                // Price input is (Token0 per Token1).
+                // We need (Token1 per Token0).
+                priceVal = 1 / priceVal;
+            }
+
+            const token0Decimals = token0.toLowerCase() === tokenA.address.toLowerCase() ? tokenA.decimals : tokenB.decimals;
+            const token1Decimals = token1.toLowerCase() === tokenA.address.toLowerCase() ? tokenA.decimals : tokenB.decimals;
+
+            const sqrtPriceX96 = getSqrtPriceX96(priceVal, token0Decimals, token1Decimals);
+
+            // 4. Construct PoolKey
+            const poolKey = {
+                currency0: token0,
+                currency1: token1,
+                fee: feeTier,
+                tickSpacing: 60,
+                hooks: CONTRACTS.unichainSepolia.eidolonHook
+            };
+
+            console.log("Initializing Pool:", { poolKey, sqrtPriceX96: sqrtPriceX96.toString() });
+
+            // 5. Execute Transaction
+            const hash = await writeContractAsync({
+                address: CONTRACTS.unichainSepolia.poolManager,
+                abi: POOL_MANAGER_ABI,
+                functionName: 'initialize',
+                args: [
+                    poolKey,
+                    sqrtPriceX96,
+                    "0x" // No hook data needed for initialization in standard case? Or empty bytes.
+                ],
+                value: 0n // Initialization doesn't require sending ETH usually unless minting? V4 init is pure state.
+            });
+
+            toast.success("Transaction Sent!", {
+                description: "Initializing Unichain Pool...",
+                action: {
+                    label: "View",
+                    onClick: () => window.open(`https://sepolia.uniscan.xyz/tx/${hash}`, '_blank')
+                }
+            });
+
+        } catch (err: any) {
+            console.error(err);
+            toast.error("Initialization Failed", {
+                description: err.message || "Unknown error"
+            });
+        }
     };
 
     return (
@@ -109,8 +217,8 @@ export function PoolManager() {
                                 key={fee}
                                 onClick={() => setFeeTier(fee)}
                                 className={`py-2 text-xs font-mono font-bold rounded border transition-all ${feeTier === fee
-                                    ? 'bg-phantom-cyan/20 border-phantom-cyan text-phantom-cyan'
-                                    : 'bg-transparent border-white/10 text-slate-500 hover:text-white'
+                                        ? 'bg-phantom-cyan/20 border-phantom-cyan text-phantom-cyan'
+                                        : 'bg-transparent border-white/10 text-slate-500 hover:text-white'
                                     }`}
                             >
                                 {fee / 10000}%
@@ -133,9 +241,10 @@ export function PoolManager() {
 
                     <button
                         onClick={handleInitialize}
-                        className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-bold text-white uppercase tracking-wider hover:border-phantom-cyan/50 hover:text-phantom-cyan transition-all"
+                        disabled={isPending}
+                        className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-bold text-white uppercase tracking-wider hover:border-phantom-cyan/50 hover:text-phantom-cyan transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        Initialize Pool
+                        {isPending ? 'Initializing...' : 'Initialize Pool'}
                     </button>
                 </div>
             </div>
