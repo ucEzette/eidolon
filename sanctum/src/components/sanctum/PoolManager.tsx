@@ -10,7 +10,7 @@ import { getPoolId, getSqrtPriceX96 } from "@/utils/uniswap";
 import { parseAbi } from "viem";
 
 const POOL_MANAGER_ABI = parseAbi([
-    "function initialize(tuple(address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96, bytes hookData) external payable returns (int24 tick)"
+    "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96, bytes hookData) external payable returns (int24 tick)"
 ]);
 
 // Mock list of "Official" Pools
@@ -217,8 +217,8 @@ export function PoolManager() {
                                 key={fee}
                                 onClick={() => setFeeTier(fee)}
                                 className={`py-2 text-xs font-mono font-bold rounded border transition-all ${feeTier === fee
-                                        ? 'bg-phantom-cyan/20 border-phantom-cyan text-phantom-cyan'
-                                        : 'bg-transparent border-white/10 text-slate-500 hover:text-white'
+                                    ? 'bg-phantom-cyan/20 border-phantom-cyan text-phantom-cyan'
+                                    : 'bg-transparent border-white/10 text-slate-500 hover:text-white'
                                     }`}
                             >
                                 {fee / 10000}%
