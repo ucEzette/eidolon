@@ -11,6 +11,9 @@ export const CONFIG = {
     }
 };
 
+console.log("Loaded CONFIG:", CONFIG);
+
+
 if (!CONFIG.PRIVATE_KEY) {
     console.warn("⚠️  WARNING: PRIVATE_KEY not found in .env");
 }

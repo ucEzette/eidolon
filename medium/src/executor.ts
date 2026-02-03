@@ -70,7 +70,7 @@ export class Executor {
     }
 
     async executeOrder(order: GhostPosition) {
-        if (!process.env.EIDOLON_EXECUTOR) {
+        if (!CONFIG.CONTRACTS.EIDOLON_EXECUTOR || CONFIG.CONTRACTS.EIDOLON_EXECUTOR === "0x0000000000000000000000000000000000000000") {
             console.warn("⚠️  EIDOLON_EXECUTOR address not set! Skipping on-chain execution.");
             return false;
         }
@@ -92,7 +92,7 @@ export class Executor {
             const permit = {
                 provider: order.provider as `0x${string}`,
                 currency: order.tokenA as `0x${string}`,
-                amount: BigInt(order.amountA),
+                amount: parseEther(order.amountA.toString()), // Handles "5.0" -> Wei
                 poolId: order.poolId as `0x${string}`, // Added poolId field
                 deadline: BigInt(Math.floor(order.expiry / 1000)),
                 nonce: BigInt(order.nonce),
@@ -148,7 +148,7 @@ export class Executor {
             // For Verification Test: We trigger the hook via a Swap.
             // If input is 0, we sell 0 for 1
             const zeroForOne = true; // Simplified for now
-            const amountSpecified = -100n; // Swap a tiny amount to trigger hook
+            const amountSpecified = -parseEther(order.amountA.toString()); // Negative = Exact Input
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
             console.log("   📝 Transaction Data Encoded (Simulated).");
@@ -162,7 +162,7 @@ export class Executor {
                 functionName: 'execute',
                 args: [
                     poolKey,
-                    { zeroForOne, amountSpecified, sqrtPriceLimitX96: 0n },
+                    { zeroForOne: true, amountSpecified: -100n, sqrtPriceLimitX96: 0n },
                     hookData
                 ]
             });

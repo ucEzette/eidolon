@@ -35,7 +35,15 @@ export class Monitor {
 
     constructor() {
         // Connect to local Redis or env var
-        this.redisSubscriber = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+        this.redisSubscriber = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+            lazyConnect: true
+        });
+
+        // Silence errors to prevent crashes if Redis is down (Monitor will fallback to polling)
+        this.redisSubscriber.on('error', (err) => {
+            // console.warn("Redis connection warning (using fallback polling):", err.message);
+        });
+
         this.executor = new Executor();
     }
 
@@ -44,27 +52,29 @@ export class Monitor {
         console.log("👻 The Medium is sensing the ethereal plane...");
 
         // 1. Subscribe to Real-Time Events
-        this.redisSubscriber.subscribe('ghost_events', (err, count) => {
-            if (err) {
-                console.error("Failed to subscribe: %s", err.message);
-            } else {
-                console.log(`[Redis] Subscribed to ${count} channels. Listening for updates...`);
-            }
-        });
-
-        this.redisSubscriber.on('message', async (channel, message) => {
-            if (channel === 'ghost_events') {
-                try {
-                    const event = JSON.parse(message);
-                    if (event.type === 'NEW_ORDER' && event.order) {
-                        console.log(`[Redis] Received NEW_ORDER event!`);
-                        await this.handleNewOrder(event.order);
-                    }
-                } catch (e) {
-                    console.error("[Redis] Failed to parse message:", e);
+        try {
+            await this.redisSubscriber.subscribe('ghost_events', (err, count) => {
+                if (!err) {
+                    console.log(`[Redis] Subscribed to ${count} channels. Listening for updates...`);
                 }
-            }
-        });
+            });
+
+            this.redisSubscriber.on('message', async (channel, message) => {
+                if (channel === 'ghost_events') {
+                    try {
+                        const event = JSON.parse(message);
+                        if (event.type === 'NEW_ORDER' && event.order) {
+                            console.log(`[Redis] Received NEW_ORDER event!`);
+                            await this.handleNewOrder(event.order);
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+            });
+        } catch (e) {
+            console.log("Redis unavailable, defaulting to polling.");
+        }
 
         // 2. Start Fallback Polling (Safety net)
         this.fallbackLoop();
@@ -73,13 +83,15 @@ export class Monitor {
     async stop() {
         this.isRunning = false;
         console.log("Stopping Monitor...");
-        await this.redisSubscriber.quit();
+        try {
+            await this.redisSubscriber.quit();
+        } catch (e) { }
     }
 
     private async fallbackLoop() {
         while (this.isRunning) {
             try {
-                // Poll every 60 seconds as backup
+                // Poll every 5 seconds (Fast for testing)
                 // console.log("🔍 Running fallback poll...");
                 const orders = await this.fetchOrders();
                 const newOrders = orders.filter(o =>
@@ -98,8 +110,8 @@ export class Monitor {
                 console.error("Fallback loop error:", error);
             }
 
-            // Wait 60 seconds (much less frequent than before)
-            await new Promise(r => setTimeout(r, 60000));
+            // Wait 5 seconds
+            await new Promise(r => setTimeout(r, 5000));
         }
     }
 
