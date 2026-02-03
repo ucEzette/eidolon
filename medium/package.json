@@ -20,7 +20,7 @@
         "@flashbots/ethers-provider-bundle": "^1.0.0",
         "axios": "^1.13.4",
         "dotenv": "^16.4.5",
-        "ethers": "^6.11.1",
+        "ethers": "6.7.1",
         "ioredis": "^5.9.2",
         "viem": "^2.45.1"
     },
