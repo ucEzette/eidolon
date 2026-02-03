@@ -7,6 +7,7 @@ import { ConnectWallet } from "@/components/wallet/ConnectWallet";
 import { useAccount } from "wagmi";
 import Image from "next/image";
 import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
+import { NetworkGuard } from "@/components/providers/NetworkGuard";
 
 export function Navbar() {
     const pathname = usePathname();
@@ -22,6 +23,7 @@ export function Navbar() {
 
     return (
         <nav className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-md">
+            <NetworkGuard />
             <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-8">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-3 group">

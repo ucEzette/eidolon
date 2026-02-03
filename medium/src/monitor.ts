@@ -29,7 +29,7 @@ export interface GhostPosition {
 export class Monitor {
     private isRunning: boolean = false;
     private processedIds: Set<string> = new Set();
-    private RELAYER_URL = 'http://localhost:3000/api/relayer/orders';
+    private RELAYER_URL = process.env.RELAYER_URL || 'http://localhost:3000/api/relayer/orders';
     private redisSubscriber: Redis;
     private executor: Executor;
 

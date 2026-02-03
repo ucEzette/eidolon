@@ -192,5 +192,23 @@
     "fee": 3000,
     "tickSpacing": 60,
     "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "USDC",
+    "amountA": "0.045",
+    "amountB": "5",
+    "expiry": 1772683532274,
+    "signature": "0x4ecc6e46054d063d5b5af567416263042222abd1a1fa7d368c0d00ad50bebd420a7cd314e49ff895cfa85ea008e5fbbaca803d5aa732b4eba58bb3663cfb25e31b",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770091383604",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0xf7facfab35535f6f58f30df8adc298fd10de822fbe3555e04cbd1f8e61f605c1",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
+    "id": "62c4ce14-884c-4072-a087-aefecd14900f",
+    "timestamp": 1770091532274,
+    "status": "Active"
   }
 ]

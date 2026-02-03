@@ -77,6 +77,12 @@ export class Executor {
 
         console.log(`⚡ Executor: Preparing settlement for ${order.id}...`);
 
+        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        const normalize = (addr: string) => addr === "ETH" ? ZERO_ADDRESS : addr;
+
+        const tokenA = normalize(order.tokenA);
+        const tokenB = normalize(order.tokenB);
+
         try {
             // 1. Construct Witness Struct (Must match WitnessLib)
             const witness = {
@@ -91,7 +97,7 @@ export class Executor {
             // Reconstruct the permit struct
             const permit = {
                 provider: order.provider as `0x${string}`,
-                currency: order.tokenA as `0x${string}`,
+                currency: tokenA as `0x${string}`,
                 amount: parseEther(order.amountA.toString()), // Handles "5.0" -> Wei
                 poolId: order.poolId as `0x${string}`, // Added poolId field
                 deadline: BigInt(Math.floor(order.expiry / 1000)),
@@ -133,8 +139,8 @@ export class Executor {
 
             // 3. Prepare PoolKey
             // Sort tokens to determine Currency0/1
-            const currency0 = order.tokenA.toLowerCase() < order.tokenB.toLowerCase() ? order.tokenA : order.tokenB;
-            const currency1 = order.tokenA.toLowerCase() < order.tokenB.toLowerCase() ? order.tokenB : order.tokenA;
+            const currency0 = tokenA.toLowerCase() < tokenB.toLowerCase() ? tokenA : tokenB;
+            const currency1 = tokenA.toLowerCase() < tokenB.toLowerCase() ? tokenB : tokenA;
 
             const poolKey = {
                 currency0: currency0 as `0x${string}`,
@@ -146,13 +152,13 @@ export class Executor {
 
             // 4. Prepare Swap Params for Executor
             // Determine swap direction: selling tokenA
-            const zeroForOne = order.tokenA.toLowerCase() === currency0.toLowerCase();
+            const zeroForOne = tokenA.toLowerCase() === currency0.toLowerCase();
             const amountSpecified = -parseEther(order.amountA.toString()); // Negative = Exact Input
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
             console.log("   📝 Transaction Data Encoded.");
             console.log("   HookData Length:", hookData.length);
-            console.log(`   🔄 Swap Direction: ${zeroForOne ? "ZeroForOne" : "OneForZero"} (Selling ${order.tokenA})`);
+            console.log(`   🔄 Swap Direction: ${zeroForOne ? "ZeroForOne" : "OneForZero"} (Selling ${tokenA})`);
 
             // REAL TRANSACTION
             const hash = await this.wallet.writeContract({
