@@ -11,7 +11,7 @@ export interface GhostPosition {
     amountB: string;
     expiry: number; // Timestamp
     signature: string;
-    status: 'Active' | 'Expired' | 'Revoked';
+    status: 'Active' | 'Expired' | 'Revoked' | 'Settled';
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
     nonce: string; // Storing as string to avoid serialization issues

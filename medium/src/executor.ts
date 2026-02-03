@@ -177,11 +177,11 @@ export class Executor {
             });
             console.log(`   🚀 Transaction Submitted: ${hash}`);
 
-            return true;
+            return hash; // Return the hash
 
         } catch (error) {
             console.error("Executor Failed:", error);
-            return false;
+            return null;
         }
     }
 }

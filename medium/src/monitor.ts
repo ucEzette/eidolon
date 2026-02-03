@@ -140,6 +140,26 @@ export class Monitor {
         console.log(`   Token: ${order.tokenA} -> Amount: ${order.amountA}`);
 
         // Pass to Executor
-        await this.executor.executeOrder(order);
+        const txHash = await this.executor.executeOrder(order);
+
+        if (txHash) {
+            console.log(`✅ Order executed! Hash: ${txHash}`);
+            await this.markAsSettled(order, txHash);
+        }
+    }
+
+    private async markAsSettled(order: GhostPosition, txHash: string) {
+        try {
+            const updatedOrder = {
+                ...order,
+                status: 'Settled', // New Status
+                txHash: txHash
+            };
+
+            await axios.post(this.RELAYER_URL, { order: updatedOrder });
+            console.log(`📡 Updated Relayer status to SETTLED for ${order.id}`);
+        } catch (e: any) {
+            console.error("Failed to update Relayer status:", e.message);
+        }
     }
 }
