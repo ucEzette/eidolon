@@ -8,6 +8,8 @@ import { useGhostPositions } from "@/hooks/useGhostPositions";
 import { useRevokePermit } from "@/hooks/useRevokePermit";
 import { toast } from "sonner";
 
+import { useAccount } from "wagmi";
+
 export function MirrorDashboard() {
     const [showRevokeModal, setShowRevokeModal] = useState(false);
     const [selectedPosition, setSelectedPosition] = useState<any>(null);
@@ -15,8 +17,14 @@ export function MirrorDashboard() {
     const { fees, membership } = useEidolonHook();
     const { positions, revokePosition } = useGhostPositions();
     const { revokePermit, isPending: isRevoking } = useRevokePermit();
+    const { address, isConnected } = useAccount();
 
-    const activePositions = positions.filter(p => p.status === 'Active');
+    const userPositions = isConnected && address
+        ? positions.filter(p => p.provider && p.provider.toLowerCase() === address.toLowerCase())
+        : [];
+
+    const activePositions = userPositions.filter(p => p.status === 'Active');
+    const totalPoints = activePositions.length * 100 + (membership.isMember ? 500 : 0);
 
     // ... (keep existing variables)
 
@@ -96,9 +104,11 @@ export function MirrorDashboard() {
             {/* Top Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Card 1: Virtual TVL */}
-                <div className="relative overflow-hidden p-6 group bg-black border border-white/10 hover:border-phantom-cyan/50 transition-all">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/5 blur-3xl transition-all group-hover:bg-phantom-cyan/10"></div>
-                    <div className="flex items-center justify-between mb-4">
+                <div className="relative overflow-visible p-6 group bg-black border border-white/10 hover:border-phantom-cyan/50 transition-all">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/5 blur-3xl transition-all group-hover:bg-phantom-cyan/10"></div>
+                    </div>
+                    <div className="relative z-10 flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Virtual TVL</p>
                             {/* Info Tooltip */}
@@ -114,19 +124,21 @@ export function MirrorDashboard() {
                         </div>
                         <span className="material-symbols-outlined text-slate-600 group-hover:text-phantom-cyan transition-colors">query_stats</span>
                     </div>
-                    <div className="flex items-baseline gap-3">
+                    <div className="relative z-10 flex items-baseline gap-3">
                         <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">$4,203,192<span className="text-slate-600 text-xl">.00</span></h3>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-500 font-mono">
+                    <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-500 font-mono">
                         <span className="material-symbols-outlined text-sm">trending_up</span>
                         <span>+1.2% (24h)</span>
                     </div>
                 </div>
 
                 {/* Card 2: Ghost Permits */}
-                <div className="relative overflow-hidden p-6 group bg-black border border-white/10 hover:border-signal-cyan/50 transition-all">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 bg-secondary/5 blur-3xl transition-all group-hover:bg-secondary/10"></div>
-                    <div className="flex items-center justify-between mb-4">
+                <div className="relative overflow-visible p-6 group bg-black border border-white/10 hover:border-signal-cyan/50 transition-all">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute -right-10 -top-10 h-32 w-32 bg-secondary/5 blur-3xl transition-all group-hover:bg-secondary/10"></div>
+                    </div>
+                    <div className="relative z-10 flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Account Status</p>
                             <div className="relative group/info">
@@ -141,21 +153,23 @@ export function MirrorDashboard() {
                         </div>
                         <span className="material-symbols-outlined text-slate-600 group-hover:text-secondary transition-colors">badge</span>
                     </div>
-                    <div className="flex items-baseline gap-3">
+                    <div className="relative z-10 flex items-baseline gap-3">
                         <h3 className="text-2xl font-bold text-white font-mono tracking-tighter">{userTier}</h3>
                         <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider border ${membership.isMember ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
                             {membership.isMember ? 'Active' : 'Basic'}
                         </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
+                    <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
                         <span>Current Fee Rate: <span className="text-white">{feeTier}</span></span>
                     </div>
                 </div>
 
                 {/* Card 3: Your Rewards */}
-                <div className="relative overflow-hidden p-6 group border border-phantom-cyan/30 bg-black hover:border-phantom-cyan/60 transition-all">
-                    <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/10 blur-3xl transition-all group-hover:bg-phantom-cyan/20"></div>
-                    <div className="flex items-center justify-between mb-4">
+                <div className="relative overflow-visible p-6 group border border-phantom-cyan/30 bg-black hover:border-phantom-cyan/60 transition-all">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                        <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/10 blur-3xl transition-all group-hover:bg-phantom-cyan/20"></div>
+                    </div>
+                    <div className="relative z-10 flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2">
                             <p className="text-phantom-cyan text-sm font-bold uppercase tracking-widest drop-shadow-[0_0_8px_rgba(165,243,252,0.3)]">Your Rewards</p>
                             {/* Info Tooltip */}
@@ -164,15 +178,15 @@ export function MirrorDashboard() {
                                     <span className="material-symbols-outlined text-[14px] text-phantom-cyan/60 group-hover/info:text-phantom-cyan">info</span>
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">EID Rewards</p>
-                                    <p className="text-white/60 text-xs font-mono">Protocol tokens earned from your Ghost Permits.</p>
+                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">Ghost Points</p>
+                                    <p className="text-white/60 text-xs font-mono">Accumulated points from providing liquidity and network participation.</p>
                                 </div>
                             </div>
                         </div>
                         <span className="material-symbols-outlined text-phantom-cyan">savings</span>
                     </div>
-                    <div className="flex items-baseline justify-between w-full">
-                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">450.22 <span className="text-sm font-sans text-slate-500">EID</span></h3>
+                    <div className="relative z-10 flex items-baseline justify-between w-full">
+                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">{totalPoints} <span className="text-sm font-sans text-slate-500">PTS</span></h3>
                         <button className="bg-phantom-cyan/10 border border-phantom-cyan/30 hover:bg-phantom-cyan/20 hover:border-phantom-cyan api-transition text-xs font-bold text-phantom-cyan px-3 py-1.5 uppercase tracking-wider shadow-none hover:shadow-[0_0_10px_rgba(165,243,252,0.2)]">
                             Claim
                         </button>

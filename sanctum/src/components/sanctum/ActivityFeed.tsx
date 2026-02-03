@@ -1,6 +1,8 @@
 import React from 'react';
+import { useActivityHistory } from '@/hooks/useActivityHistory';
 
 export function ActivityFeed() {
+    const { events } = useActivityHistory();
     return (
         <aside className="w-full h-full glass-panel border-l border-white/5 flex flex-col shadow-2xl z-20 animate-in slide-in-from-right duration-500 bg-[#02040a]/80 backdrop-blur-xl">
             {/* Feed Header */}
@@ -38,116 +40,54 @@ export function ActivityFeed() {
 
             {/* Feed List Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-
-                {/* Pending Item */}
-                <div className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 hover:border-yellow-500/30 transition-all">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500/50"></div>
-                    <div className="shrink-0 pt-1">
-                        <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20">
-                            <span className="material-symbols-outlined text-yellow-400 animate-spin text-sm">progress_activity</span>
-                        </div>
+                {events.length === 0 ? (
+                    <div className="text-center text-gray-500 text-xs py-8">
+                        No recent activity.
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                            <h4 className="text-white font-semibold text-sm truncate pr-2 font-display">Position Settling</h4>
-                            <span className="text-[10px] text-yellow-400 font-mono bg-yellow-400/10 px-1.5 py-0.5 rounded border border-yellow-400/20">PENDING</span>
+                ) : (
+                    events.map((event) => (
+                        <div key={event.id} className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
+                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${event.status === 'confirmed' ? 'bg-cyan-500/50' : event.status === 'failed' ? 'bg-red-500/50' : 'bg-yellow-500/50'}`}></div>
+                            <div className="shrink-0 pt-1">
+                                <div className={`h-10 w-10 rounded-full flex items-center justify-center border ${event.status === 'confirmed' ? 'bg-cyan-500/10 border-cyan-500/20' :
+                                    event.status === 'failed' ? 'bg-red-500/10 border-red-500/20' :
+                                        'bg-yellow-500/10 border-yellow-500/20'
+                                    }`}>
+                                    <span className={`material-symbols-outlined text-sm ${event.status === 'confirmed' ? 'text-cyan-400' :
+                                        event.status === 'failed' ? 'text-red-500' :
+                                            'text-yellow-400 animate-spin'
+                                        }`}>
+                                        {event.status === 'confirmed' ? 'check_circle' : event.status === 'failed' ? 'error' : 'progress_activity'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start mb-1">
+                                    <h4 className="text-white font-semibold text-sm truncate pr-2 font-display">{event.type}</h4>
+                                    <span className="text-xs text-gray-500 font-mono">
+                                        {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
+                                <p className="text-gray-400 text-xs leading-relaxed mb-2">
+                                    {event.details || "Protocol interaction detected."}
+                                </p>
+                                {event.txHash && (
+                                    <div className="flex justify-end">
+                                        <a
+                                            href={`https://unichain-sepolia.blockscout.com/tx/${event.txHash}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-white transition-colors group/link"
+                                        >
+                                            View on Explorer
+                                            <span className="material-symbols-outlined text-[12px] group-hover/link:translate-x-0.5 transition-transform">open_in_new</span>
+                                        </a>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <p className="text-gray-400 text-xs leading-relaxed mb-2">Rebalancing pool weights for ETH-USDC pair.</p>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-500 font-mono">Tx: 0x82...9a</span>
-                            <span className="h-1 w-1 rounded-full bg-gray-700"></span>
-                            <span className="text-[10px] text-gray-500">Processing...</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Success Item */}
-                <div className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-500/50"></div>
-                    <div className="shrink-0 pt-1">
-                        <div className="h-10 w-10 rounded-full bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20">
-                            <span className="material-symbols-outlined text-cyan-400 text-sm">check_circle</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                            <h4 className="text-white font-semibold text-sm truncate pr-2 font-display">Rewards Claimed</h4>
-                            <span className="text-xs text-gray-500 font-mono">2 mins ago</span>
-                        </div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-cyan-400 text-sm font-bold font-mono">+ 450.00 USDC</span>
-                        </div>
-                        <div className="flex justify-end">
-                            <a className="flex items-center gap-1 text-[11px] text-cyan-400 hover:text-white transition-colors group/link" href="#">
-                                View on Explorer
-                                <span className="material-symbols-outlined text-[12px] group-hover/link:translate-x-0.5 transition-transform">open_in_new</span>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Info Item */}
-                <div className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 hover:border-indigo-500/30 transition-all">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500/50"></div>
-                    <div className="shrink-0 pt-1">
-                        <div className="h-10 w-10 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
-                            <span className="material-symbols-outlined text-indigo-400 text-sm">draw</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                            <h4 className="text-white font-semibold text-sm truncate pr-2 font-display">Permit Signed</h4>
-                            <span className="text-xs text-gray-500 font-mono">1 hour ago</span>
-                        </div>
-                        <p className="text-gray-400 text-xs leading-relaxed">Gasless approval for USDC spend limit granted.</p>
-                    </div>
-                </div>
-
-                {/* Failed Item */}
-                <div className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-red-500/5 border border-red-500/10 hover:bg-red-500/10 transition-all">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/50"></div>
-                    <div className="shrink-0 pt-1">
-                        <div className="h-10 w-10 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
-                            <span className="material-symbols-outlined text-red-500 text-sm">error</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                            <h4 className="text-white font-semibold text-sm truncate pr-2 font-display">Swap Failed</h4>
-                            <span className="text-xs text-gray-500 font-mono">3 hours ago</span>
-                        </div>
-                        <p className="text-gray-400 text-xs leading-relaxed mb-2">Slippage tolerance exceeded (0.5%).</p>
-                        <button className="text-[11px] font-bold text-red-400 hover:text-white border border-red-500/30 rounded px-2 py-1 hover:bg-red-500/20 transition-colors">
-                            Retry Transaction
-                        </button>
-                    </div>
-                </div>
-
-                {/* Separator */}
-                <div className="flex items-center gap-4 py-2">
-                    <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-                    <span className="text-[10px] font-medium text-gray-500 uppercase tracking-widest font-mono">October 24</span>
-                    <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-gray-700 to-transparent"></div>
-                </div>
-
-                {/* Older Item */}
-                <div className="relative overflow-hidden rounded-xl p-4 flex gap-4 group bg-white/5 border border-white/5 opacity-60 hover:opacity-100 transition-all">
-                    <div className="shrink-0 pt-1">
-                        <div className="h-10 w-10 rounded-full bg-emerald-900/20 flex items-center justify-center border border-emerald-500/20">
-                            <span className="material-symbols-outlined text-emerald-400 text-sm">add_card</span>
-                        </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                            <h4 className="text-white font-semibold text-sm truncate pr-2 font-display">Liquidity Added</h4>
-                            <span className="text-xs text-gray-500 font-mono">2 days ago</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-gray-300 text-sm">Pool Share: <span className="text-white font-mono font-bold">0.05%</span></span>
-                        </div>
-                    </div>
-                </div>
-
+                    ))
+                )}
             </div>
 
             {/* Bottom Fade */}

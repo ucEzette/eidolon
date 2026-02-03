@@ -45,7 +45,8 @@
     "tickSpacing": 60,
     "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
     "timestamp": 1770000000000,
-    "status": "Active"
+    "status": "Revoked",
+    "txHash": "0x7f9983759541a13dfce88a704e97720582c904c7978dfcda0263ee09780e8ba0"
   },
   {
     "id": "mock-uuid-9999",
@@ -63,7 +64,8 @@
     "tickSpacing": 60,
     "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
     "timestamp": 1770000000000,
-    "status": "Active"
+    "status": "Revoked",
+    "txHash": "0x834621695e9f4f8f6092e1078bf4cf93d2f9ac709a8cdc017142599e17b2654e"
   },
   {
     "id": "mock-uuid-8888",
@@ -117,7 +119,8 @@
     "tickSpacing": 60,
     "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
     "timestamp": 1770000000000,
-    "status": "Active"
+    "status": "Revoked",
+    "txHash": "0xafcdf5f6fc59a274aae265305264e572d54d656e17730d41933a506fb112f382"
   },
   {
     "id": "order-verification-3",
@@ -127,7 +130,7 @@
     "amountB": "1000000",
     "expiry": 1999999999,
     "signature": "0x12345",
-    "status": "Active",
+    "status": "Revoked",
     "timestamp": 12345678,
     "liquidityMode": "one-sided",
     "nonce": "1",
@@ -135,7 +138,8 @@
     "poolId": "0xpool123",
     "fee": 3000,
     "tickSpacing": 60,
-    "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+    "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
+    "txHash": "0xa76de58b846353d5ca5bf324efa19c6b21e6810121f60030467790a18a4c6bd9"
   },
   {
     "id": "e2e-test-1",
@@ -209,6 +213,25 @@
     "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
     "id": "62c4ce14-884c-4072-a087-aefecd14900f",
     "timestamp": 1770091532274,
+    "status": "Revoked",
+    "txHash": "0x46f848be419c7a3cf9f962398c3035d71c6d225caa8a4a49c7b3f9361adacfa3"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "USDC",
+    "amountA": "0.004",
+    "amountB": "4",
+    "expiry": 1772714493319,
+    "signature": "0xe61dc2e212e7f7f42308b88ba7047007f5ea3532ef83ad31faadbedd9b047e230e24ed40aec2191954199014d17bc1db06054bf4c4f084e0efcaf3e597611f0f1c",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770122473817",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0xf7facfab35535f6f58f30df8adc298fd10de822fbe3555e04cbd1f8e61f605c1",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
+    "id": "cbc88ecb-2ac6-43bb-a7d1-d70a88e49d5c",
+    "timestamp": 1770122493319,
     "status": "Active"
   }
 ]
