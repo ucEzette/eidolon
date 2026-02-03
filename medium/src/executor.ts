@@ -78,7 +78,12 @@ export class Executor {
         console.log(`⚡ Executor: Preparing settlement for ${order.id}...`);
 
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-        const normalize = (addr: string) => addr === "ETH" ? ZERO_ADDRESS : addr;
+        const normalize = (addr: string) => {
+            if (addr === "ETH") return ZERO_ADDRESS;
+            if (addr === "USDC") return "0x31d0220469e10c4E71834a79b1f276d740d3768F";
+            if (addr === "WETH") return "0x4200000000000000000000000000000000000006";
+            return addr;
+        };
 
         const tokenA = normalize(order.tokenA);
         const tokenB = normalize(order.tokenB);

@@ -5,7 +5,6 @@ import { WagmiProvider } from "wagmi";
 import { config } from "@/config/web3";
 import { useState, type ReactNode } from "react";
 import { CircleWalletProvider } from "./CircleWalletProvider";
-import { NetworkGuard } from "./NetworkGuard";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // WEB3 PROVIDER (wagmi v2)
@@ -32,7 +31,7 @@ export function Web3Provider({ children }: Web3ProviderProps) {
         <WagmiProvider config={config}>
             <QueryClientProvider client={queryClient}>
                 <CircleWalletProvider>
-                    <NetworkGuard>{children}</NetworkGuard>
+                    {children}
                 </CircleWalletProvider>
             </QueryClientProvider>
         </WagmiProvider>
