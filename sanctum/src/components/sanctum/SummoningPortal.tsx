@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { useGhostPermit } from "@/hooks/useGhostPermit";
 import { useEidolonHook } from "@/hooks/useEidolonHook";
 import { useAccount, useBalance } from "wagmi";
 import { TOKENS, TOKEN_MAP, type Token } from "@/config/tokens";
-import { parseUnits } from "viem";
 import { getPoolId } from "@/utils/uniswap";
 import { CONTRACTS } from "@/config/web3";
 import { toast } from "sonner";
+import { type Address } from "viem";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
 import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
@@ -137,8 +138,15 @@ export function SummoningPortal() {
             <div className="bg-black/40 p-4 md:p-8 relative backdrop-blur-md">
                 {/* Header */}
                 <div className="mb-8 text-center">
-                    <div className="inline-flex items-center justify-center p-3 mb-4 border border-phantom-cyan/20 bg-phantom-cyan/5 shadow-[0_0_15px_-3px_rgba(165,243,252,0.2)]">
-                        <span className="material-symbols-outlined text-phantom-cyan text-2xl">pentagon</span>
+                    <div className="inline-flex items-center justify-center p-3 mb-4 border border-phantom-cyan/20 bg-phantom-cyan/5 shadow-[0_0_20px_-5px_rgba(165,243,252,0.3)]">
+                        <div className="relative w-16 h-16">
+                            <Image
+                                src="/eye_of_god.png"
+                                alt="Eye of God"
+                                fill
+                                className="object-contain filter brightness-110 drop-shadow-[0_0_8px_rgba(165,243,252,0.6)]"
+                            />
+                        </div>
                     </div>
                     <h1 className="text-2xl md:text-3xl font-display font-bold text-white tracking-widest uppercase mb-2 drop-shadow-md">Summon Ghost Permit</h1>
                     <p className="text-text-muted text-sm font-mono">Authorize zero-TVL liquidity without locking assets.</p>

@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 export function RewardsPortal() {
     const { positions } = useGhostPositions();
     const { events, loading } = useActivityHistory();
-    const [currentTime, setCurrentTime] = useState(Date.now());
+    const [currentTime, setCurrentTime] = useState(() => Date.now());
 
     // Update time every minute to refresh rewards
     useEffect(() => {

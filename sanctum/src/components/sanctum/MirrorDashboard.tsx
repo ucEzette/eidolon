@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useEidolonHook } from "@/hooks/useEidolonHook";
 import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
@@ -18,6 +18,12 @@ export function MirrorDashboard() {
     const { positions, revokePosition } = useGhostPositions();
     const { revokePermit, isPending: isRevoking } = useRevokePermit();
     const { address, isConnected } = useAccount();
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     const userPositions = isConnected && address
         ? positions.filter(p => p.provider && p.provider.toLowerCase() === address.toLowerCase())
@@ -78,7 +84,6 @@ export function MirrorDashboard() {
     // Helper for modal time display
     const getModalTimeLeft = () => {
         if (!selectedPosition) return "";
-        const now = Date.now();
         const timeLeft = Math.max(0, selectedPosition.expiry - now);
         const hours = Math.floor(timeLeft / (1000 * 60 * 60));
         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
@@ -276,7 +281,6 @@ export function MirrorDashboard() {
                                     </tr>
                                 ) : (
                                     activePositions.map((pos) => {
-                                        const now = Date.now();
                                         const timeLeft = Math.max(0, pos.expiry - now);
                                         const hours = Math.floor(timeLeft / (1000 * 60 * 60));
                                         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
