@@ -8,7 +8,11 @@ import { useGhostPositions } from "@/hooks/useGhostPositions";
 import { useRevokePermit } from "@/hooks/useRevokePermit";
 import { toast } from "sonner";
 
-import { useAccount } from "wagmi";
+import { useAccount, useReadContracts } from "wagmi";
+import { CONTRACTS } from "@/config/web3";
+import EidolonHookABI from "@/abi/EidolonHook.json";
+import { formatUnits } from "viem";
+import { TOKENS } from "@/config/tokens";
 
 export function MirrorDashboard() {
     const [showRevokeModal, setShowRevokeModal] = useState(false);
@@ -24,6 +28,42 @@ export function MirrorDashboard() {
         const interval = setInterval(() => setNow(Date.now()), 1000);
         return () => clearInterval(interval);
     }, []);
+
+    // 1. Fetch Real Accumulated Rewards (ETH, USDC, eiETH)
+    // We check the 'lifetimeEarnings' mapping for the connected user
+    const rewardTokens = [
+        "0x0000000000000000000000000000000000000000", // ETH
+        "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
+        "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6"  // eiETH
+    ];
+
+    const { data: earningsData } = useReadContracts({
+        contracts: rewardTokens.map(token => ({
+            address: CONTRACTS.unichainSepolia.eidolonHook,
+            abi: EidolonHookABI,
+            functionName: "lifetimeEarnings",
+            args: [address, token],
+            chainId: 1301
+        })),
+        query: {
+            refetchInterval: 5000,
+            enabled: !!address
+        }
+    });
+
+    // Calculate Total Earnings (Naive Sum for Demo)
+    const earnings = {
+        ETH: earningsData?.[0]?.result ? Number(formatUnits(earningsData[0].result as bigint, 18)) : 0,
+        USDC: earningsData?.[1]?.result ? Number(formatUnits(earningsData[1].result as bigint, 6)) : 0,
+        eiETH: earningsData?.[2]?.result ? Number(formatUnits(earningsData[2].result as bigint, 18)) : 0,
+    };
+
+    // Display string: e.g., "0.05 ETH + 20 USDC"
+    const rewardsDisplay = [
+        earnings.ETH > 0 ? `${earnings.ETH.toFixed(4)} ETH` : null,
+        earnings.USDC > 0 ? `${earnings.USDC.toFixed(2)} USDC` : null,
+        earnings.eiETH > 0 ? `${earnings.eiETH.toFixed(4)} eiETH` : null
+    ].filter(Boolean).join(" + ") || "0.00";
 
     const userPositions = isConnected && address
         ? positions.filter(p => p.provider && p.provider.toLowerCase() === address.toLowerCase())
@@ -183,21 +223,23 @@ export function MirrorDashboard() {
                                     <span className="material-symbols-outlined text-[14px] text-phantom-cyan/60 group-hover/info:text-phantom-cyan">info</span>
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">Ghost Points</p>
-                                    <p className="text-white/60 text-xs font-mono">Accumulated points from providing liquidity and network participation.</p>
+                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">Realized Fees</p>
+                                    <p className="text-white/60 text-xs font-mono">Accumulated fees paid directly to your wallet from JIT liquidity provision.</p>
                                 </div>
                             </div>
                         </div>
                         <span className="material-symbols-outlined text-phantom-cyan">savings</span>
                     </div>
                     <div className="relative z-10 flex items-baseline justify-between w-full">
-                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">{totalPoints} <span className="text-sm font-sans text-slate-500">PTS</span></h3>
-                        <button className="bg-phantom-cyan/10 border border-phantom-cyan/30 hover:bg-phantom-cyan/20 hover:border-phantom-cyan api-transition text-xs font-bold text-phantom-cyan px-3 py-1.5 uppercase tracking-wider shadow-none hover:shadow-[0_0_10px_rgba(165,243,252,0.2)]">
-                            Claim
-                        </button>
+                        <h3 className="text-xl font-bold text-white font-mono tracking-tighter truncate" title={rewardsDisplay}>
+                            {rewardsDisplay}
+                        </h3>
+                        <div className="flex flex-col items-end">
+                            <span className="text-[10px] uppercase text-slate-500 font-mono">Lifetime Earned</span>
+                        </div>
                     </div>
                     <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
-                        <span>Next epoch in 4h 12m</span>
+                        <span>Auto-compounding active</span>
                     </div>
                 </div>
             </div>
@@ -323,7 +365,7 @@ export function MirrorDashboard() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-primary font-bold">
-                                                    {isDual ? '18.2%' : '12.4%'}
+                                                    100% <span className="text-[10px] text-slate-500 font-normal">(JIT)</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border shadow-[0_0_10px_rgba(16,185,129,0.2)]

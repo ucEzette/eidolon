@@ -74,21 +74,21 @@ const OFFICIAL_POOL_KEYS = [
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     },
     {
         token0: "0x0000000000000000000000000000000000000000", // ETH
         token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     },
     {
         token0: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     }
 ];
 
@@ -116,7 +116,7 @@ export function PoolManager() {
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     });
 
     // Network Check & Auto-Switch
@@ -212,6 +212,11 @@ export function PoolManager() {
     });
 
     const handleInitialize = async () => {
+        if (!isConnected) {
+            toast.error("Wallet not connected", { description: "Please connect your wallet to initialize a pool." });
+            return;
+        }
+
         if (isWrongNetwork) {
             handleSwitchNetwork();
             return;
@@ -347,7 +352,7 @@ export function PoolManager() {
             <div className="p-6">
 
                 {/* Check Network State */}
-                {isWrongNetwork ? (
+                {isWrongNetwork && isConnected ? (
                     <div className="p-12 border border-rose-500/30 bg-rose-500/5 rounded-xl flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95">
                         <span className="material-symbols-outlined text-5xl text-rose-500 mb-4">network_check</span>
                         <h3 className="text-2xl font-display text-white mb-2">Wrong Network Detected</h3>
@@ -609,7 +614,8 @@ export function PoolManager() {
                                         <button
                                             className={`w-full relative overflow-hidden group py-4 rounded-xl font-bold font-display tracking-widest transition-all ${isPoolInitialized
                                                 ? "border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 cursor-default"
-                                                : "bg-primary text-black hover:shadow-[0_0_25px_-5px_rgba(165,243,252,0.5)] active:scale-[0.98]"}`}
+                                                : !isConnected ? "bg-white/10 text-white cursor-not-allowed"
+                                                    : "bg-primary text-black hover:shadow-[0_0_25px_-5px_rgba(165,243,252,0.5)] active:scale-[0.98]"}`}
                                             onClick={handleInitialize}
                                             disabled={isPoolInitialized}
                                         >
@@ -622,6 +628,11 @@ export function PoolManager() {
                                                     <span className="text-[10px] opacity-60 font-mono font-normal normal-case">
                                                         Add Liquidity via Summoning Portal
                                                     </span>
+                                                </span>
+                                            ) : !isConnected ? (
+                                                <span className="flex items-center justify-center gap-3">
+                                                    CONNECT WALLET
+                                                    <span className="material-symbols-outlined">account_balance_wallet</span>
                                                 </span>
                                             ) : (
                                                 <span className="flex items-center justify-center gap-3">

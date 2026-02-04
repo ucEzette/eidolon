@@ -105,6 +105,10 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @dev currency => accumulated fees
     mapping(Currency => uint256) public protocolFees;
 
+    /// @notice Tracks total lifetime earnings for each provider
+    /// @dev provider => currency => total earnings
+    mapping(address => mapping(Currency => uint256)) public lifetimeEarnings;
+
     /// @notice Bot kill count for the Exorcism leaderboard
     /// @dev user => number of bots exorcised
     mapping(address => uint256) public botKillCount;
@@ -503,6 +507,11 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
             // Emit settlement event with actual fees earned
             emit LiquidityMaterialized(provider, poolId, state.amount, providerProfit);
+
+            // Track lifetime earnings
+            if (providerProfit > 0) {
+                lifetimeEarnings[provider][state.currency] += providerProfit;
+            }
         }
 
         return (this.afterSwap.selector, 0);

@@ -24,8 +24,8 @@ export const unichainSepolia: Chain = {
     },
     blockExplorers: {
         default: {
-            name: "Uniscan",
-            url: "https://sepolia.uniscan.xyz",
+            name: "Unichain Explorer",
+            url: "https://unichain-sepolia.blockscout.com",
         },
     },
     testnet: true,
@@ -62,7 +62,7 @@ export const chains = [unichainSepolia, mainnet] as const;
 export const CONTRACTS = {
     // Unichain Sepolia testnet - DEPLOYED & VERIFIED
     unichainSepolia: {
-        eidolonHook: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8" as `0x${string}`,
+        eidolonHook: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8" as `0x${string}`,
         permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as `0x${string}`,
         poolManager: "0x00B036B58a818B1BC34d502D3fE730Db729e62AC" as `0x${string}`,
     },
