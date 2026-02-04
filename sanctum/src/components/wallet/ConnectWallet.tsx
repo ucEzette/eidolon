@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useAccount, useConnect, useDisconnect, useBalance, useEnsName } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
@@ -255,9 +256,9 @@ export function ConnectWallet() {
                               flex items-center justify-center group-hover:scale-110 transition-transform">
                   {/* Dynamic Icon based on connector name */}
                   {connector.name.toLowerCase().includes('rabby') ? (
-                    <img src="https://rabby.io/assets/rabby-logo.png" alt="Rabby" className="w-5 h-5 object-contain" />
+                    <Image src="https://rabby.io/assets/rabby-logo.png" alt="Rabby" width={20} height={20} className="w-5 h-5 object-contain" unoptimized />
                   ) : connector.name.toLowerCase().includes('metamask') ? (
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask" className="w-5 h-5" />
+                    <Image src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask" width={20} height={20} className="w-5 h-5" unoptimized />
                   ) : connector.name.toLowerCase().includes('coinbase') ? (
                     <div className="w-5 h-5 rounded-full bg-[#0052FF] flex items-center justify-center text-white text-[10px] font-bold">C</div>
                   ) : connector.id === 'injected' ? (
