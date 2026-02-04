@@ -30,6 +30,14 @@ export const TOKENS: Token[] = [
         address: "0x31d0220469e10c4E71834a79b1f276d740d3768F",
         decimals: 6,
         type: "STABLE"
+    },
+    {
+        symbol: "eiETH",
+        name: "Eidolon ETH",
+        address: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // Deployed Address
+        decimals: 18,
+        type: "GENESIS",
+        logo: "/eye_of_god.png"
     }
 ];
 

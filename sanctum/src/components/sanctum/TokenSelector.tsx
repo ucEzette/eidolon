@@ -1,8 +1,10 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import Image from "next/image";
 import { TOKENS, type Token } from '@/config/tokens';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance, useReadContracts } from 'wagmi';
+import { isAddress, type Address, erc20Abi } from "viem";
 
 interface TokenSelectorProps {
     isOpen: boolean;
@@ -11,6 +13,49 @@ interface TokenSelectorProps {
 }
 
 export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps) {
+    const [search, setSearch] = useState("");
+    const { address } = useAccount();
+
+    const filteredTokens = useMemo(() => {
+        return TOKENS.filter(t =>
+            t.symbol.toLowerCase().includes(search.toLowerCase()) ||
+            t.name.toLowerCase().includes(search.toLowerCase()) ||
+            t.address.toLowerCase() === search.toLowerCase()
+        );
+    }, [search]);
+
+    // Custom Token Logic
+    const isSearchAddress = isAddress(search);
+    const { data: tokenData, isLoading: isTokenLoading } = useReadContracts({
+        contracts: [
+            { address: search as Address, abi: erc20Abi, functionName: 'symbol' },
+            { address: search as Address, abi: erc20Abi, functionName: 'name' },
+            { address: search as Address, abi: erc20Abi, functionName: 'decimals' },
+        ],
+        query: {
+            enabled: isSearchAddress && filteredTokens.length === 0 // Only fetch if not already in list
+        }
+    });
+
+    const customToken: Token | null = useMemo(() => {
+        if (!isSearchAddress || !tokenData || filteredTokens.length > 0) return null;
+
+        const [symbol, name, decimals] = tokenData;
+
+        if (symbol.status === 'success' && decimals.status === 'success') {
+            return {
+                symbol: symbol.result as string,
+                name: name.status === 'success' ? name.result as string : "Imported Token",
+                address: search as Address,
+                decimals: decimals.result as number,
+                logo: undefined, // No logo for custom
+                isNative: false
+            };
+        }
+        return null;
+    }, [isSearchAddress, tokenData, search, filteredTokens.length]);
+
+
     if (!isOpen) return null;
 
     return (
@@ -40,6 +85,8 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
                                 placeholder="Search by name or paste address"
                                 type="text"
                                 autoFocus
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
                             />
                         </div>
                     </div>
@@ -49,20 +96,50 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
                         <p className="mb-3 text-xs font-medium uppercase tracking-widest text-white/40">Trending Vessels</p>
                         <div className="flex flex-wrap gap-2">
                             <TrendingChip symbol="ETH" change="+1.2%" isPositive />
+                            <TrendingChip symbol="eiETH" change="+100%" isPositive />
                             <TrendingChip symbol="USDC" change="+0.01%" isPositive />
-                            <TrendingChip symbol="OP" change="-2.4%" isPositive={false} />
                         </div>
                     </div>
 
                     {/* Token List */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar px-2 pb-4 space-y-1">
-                        {TOKENS.map((token) => (
+                        {/* Standard Filtered Tokens */}
+                        {filteredTokens.map((token) => (
                             <TokenRow
                                 key={token.symbol}
                                 token={token}
                                 onSelect={() => onSelect(token)}
                             />
                         ))}
+
+                        {/* Custom Token Logic */}
+                        {isSearchAddress && filteredTokens.length === 0 && (
+                            <div className="px-4 py-2">
+                                {isTokenLoading ? (
+                                    <div className="flex items-center gap-2 text-text-muted text-sm animate-pulse">
+                                        <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                                        Scanning blockchain...
+                                    </div>
+                                ) : customToken ? (
+                                    <>
+                                        <p className="text-xs text-text-muted uppercase tracking-widest mb-2 px-2">Imported Token</p>
+                                        <TokenRow token={customToken} onSelect={() => onSelect(customToken)} />
+                                    </>
+                                ) : (
+                                    <div className="p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 text-center">
+                                        <p className="text-rose-400 text-sm font-bold">Token Not Found</p>
+                                        <p className="text-xs text-rose-400/60 mt-1">Address does not appear to be a valid ERC20.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {!isSearchAddress && filteredTokens.length === 0 && search.length > 0 && (
+                            <div className="p-8 text-center text-text-muted">
+                                <span className="material-symbols-outlined text-4xl mb-2 opacity-50">search_off</span>
+                                <p>No tokens found</p>
+                            </div>
+                        )}
                     </div>
 
                 </div>
@@ -89,7 +166,7 @@ function TokenRow({ token, onSelect }: { token: Token, onSelect: () => void }) {
     const { address } = useAccount();
     const { data: balance } = useBalance({
         address: address,
-        token: token.address,
+        token: token.address === "0x0000000000000000000000000000000000000000" ? undefined : token.address,
     });
 
     const addToWallet = async (e: React.MouseEvent) => {
@@ -117,15 +194,18 @@ function TokenRow({ token, onSelect }: { token: Token, onSelect: () => void }) {
     return (
         <div onClick={onSelect} className="group relative flex cursor-pointer items-center justify-between rounded-xl p-4 transition-all duration-300 hover:bg-white/5 border border-transparent hover:border-white/10">
             <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center border border-white/10 group-hover:border-cyan-400/50 transition-colors shadow-lg relative">
-                    {/* Placeholder Icon */}
-                    <span className="text-xs font-bold text-white/40">{token.symbol[0]}</span>
+                <div className="h-10 w-10 rounded-full bg-zinc-800 flex items-center justify-center border border-white/10 group-hover:border-cyan-400/50 transition-colors shadow-lg relative overflow-hidden">
+                    {token.logo ? (
+                        <Image src={token.logo} alt={token.symbol} fill className="object-cover" unoptimized />
+                    ) : (
+                        <span className="text-xs font-bold text-white/40">{token.symbol.slice(0, 2)}</span>
+                    )}
 
                     {/* Add to Wallet Button (visible on hover) */}
                     {!token.isNative && (
                         <button
                             onClick={addToWallet}
-                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white/10 hover:bg-cyan-400 border border-black/50 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 hover:scale-110"
+                            className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white/10 hover:bg-cyan-400 border border-black/50 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100 hover:scale-110 z-10"
                             title="Add to Wallet"
                         >
                             <span className="material-symbols-outlined text-[10px] text-white">add</span>
@@ -137,7 +217,7 @@ function TokenRow({ token, onSelect }: { token: Token, onSelect: () => void }) {
                         <span className="text-base font-bold text-white group-hover:text-cyan-200 transition-colors">{token.symbol}</span>
                         {token.type && <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-white/60">{token.type}</span>}
                     </div>
-                    <span className="text-sm text-white/40 group-hover:text-white/60 transition-colors">{token.name}</span>
+                    <span className="text-sm text-white/40 group-hover:text-white/60 transition-colors max-w-[150px] truncate">{token.name}</span>
                 </div>
             </div>
             <div className="flex flex-col items-end gap-0.5">

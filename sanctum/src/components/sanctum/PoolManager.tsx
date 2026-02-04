@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import { TOKENS, type Token } from "@/config/tokens";
+import { useLocalStorage } from "usehooks-ts";
+import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS, unichainSepolia } from "@/config/web3";
 import { toast } from "sonner";
@@ -51,6 +53,45 @@ function sqrtPriceToPrice(sqrtPriceX96: bigint, decimals0: number, decimals1: nu
     return (Number(adjusted) / Number(PRICE_PRECISION)).toFixed(2);
 }
 
+const FEERATE_TO_TICKSPACING: Record<number, number> = {
+    500: 10,
+    3000: 60,
+    10000: 200
+};
+
+interface Activity {
+    id: string;
+    type: 'INITIALIZE' | 'SWAP' | 'LIQUIDITY';
+    description: string;
+    hash: string;
+    timestamp: number;
+}
+
+// Official Pools Defined Outside Component to prevent re-creation
+const OFFICIAL_POOL_KEYS = [
+    {
+        token0: "0x0000000000000000000000000000000000000000", // ETH
+        token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+    },
+    {
+        token0: "0x0000000000000000000000000000000000000000", // ETH
+        token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+    },
+    {
+        token0: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
+        token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
+        fee: 3000,
+        tickSpacing: 60,
+        hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
+    }
+];
+
 export function PoolManager() {
     const { address, isConnected } = useAccount();
     const chainId = useChainId();
@@ -60,7 +101,11 @@ export function PoolManager() {
     const { writeContractAsync } = useWriteContract();
 
     // Removed isExpanded state - Always visible
-    const [activeTab, setActiveTab] = useState<'list' | 'create'>('list'); // Tab state
+    const [activeTab, setActiveTab] = useState<'list' | 'create' | 'activity'>('list'); // Tab state
+
+    // Mounted check for hydration safety
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
     // Selector State
     const [selectorType, setSelectorType] = useState<'token0' | 'token1' | null>(null);
@@ -118,31 +163,49 @@ export function PoolManager() {
         return hexToBigInt(poolStateData) !== 0n;
     }, [poolStateData]);
 
-    // Also get list of Official Pools to display status
-    const officialPoolKeys = [
-        {
-            token0: "0x0000000000000000000000000000000000000000", // ETH
-            token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-            fee: 3000,
-            tickSpacing: 60,
-            hooks: "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8"
-        }
-    ];
+    // Local Storage for User-Imported Pools & Activity
+    const [customPools, setCustomPools] = useLocalStorage<typeof OFFICIAL_POOL_KEYS>('eidolon-custom-pools', []);
+    const [activities, setActivities] = useLocalStorage<Activity[]>('eidolon-activity-log', []);
 
-    const officialPoolQueries = officialPoolKeys.map(pk => {
-        const pid = getPoolId(pk.token0 as `0x${string}`, pk.token1 as `0x${string}`, pk.fee, pk.tickSpacing, pk.hooks as `0x${string}`);
-        const slot = getPoolStateSlot(pid);
-        return {
-            address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
-            abi: POOL_MANAGER_ABI,
-            functionName: "extsload",
-            args: [slot],
-            chainId: unichainSepolia.id // Explicitly query correct chain
-        } as const;
-    });
+    // Combine Official + Custom (Memoized)
+    const allPoolKeys = useMemo(() => {
+        if (!mounted) return OFFICIAL_POOL_KEYS;
 
-    const { data: officialPoolsStatus } = useReadContracts({
-        contracts: officialPoolQueries,
+        const keys = [...OFFICIAL_POOL_KEYS];
+        customPools.forEach((cp: any) => {
+            const exists = keys.some(k =>
+                (k.token0 === cp.token0 && k.token1 === cp.token1 && k.fee === cp.fee) ||
+                (k.token0 === cp.token1 && k.token1 === cp.token0 && k.fee === cp.fee)
+            );
+            if (!exists) keys.push(cp);
+        });
+        return keys;
+    }, [customPools, mounted]);
+
+    const removeCustomPool = (indexInCustom: number) => {
+        const newCustom = [...customPools];
+        newCustom.splice(indexInCustom, 1);
+        setCustomPools(newCustom);
+        toast.success("Pool Removed from List");
+    };
+
+    // Prepare queries for all pools
+    const allPoolQueries = useMemo(() => {
+        return allPoolKeys.map(pk => {
+            const pid = getPoolId(pk.token0 as `0x${string}`, pk.token1 as `0x${string}`, pk.fee, pk.tickSpacing, pk.hooks as `0x${string}`);
+            const slot = getPoolStateSlot(pid);
+            return {
+                address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
+                abi: POOL_MANAGER_ABI,
+                functionName: "extsload",
+                args: [slot],
+                chainId: unichainSepolia.id
+            } as const;
+        });
+    }, [allPoolKeys]);
+
+    const { data: poolsStatus } = useReadContracts({
+        contracts: allPoolQueries,
         query: {
             enabled: !isWrongNetwork
         }
@@ -187,7 +250,7 @@ export function PoolManager() {
                 hooks: poolConfig.hooks as `0x${string}`
             };
 
-            await writeContractAsync({
+            const hash = await writeContractAsync({
                 address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
                 abi: POOL_MANAGER_ABI,
                 functionName: "initialize",
@@ -195,6 +258,20 @@ export function PoolManager() {
             });
 
             toast.success("Transaction Sent", { description: "Initializing Pool..." });
+
+            // Add to Activity Log
+            const newActivity: Activity = {
+                id: crypto.randomUUID(),
+                type: 'INITIALIZE',
+                description: `Initialized ${t0?.symbol}/${t1?.symbol} (${(poolConfig.fee / 10000)}%)`,
+                hash: hash,
+                timestamp: Date.now()
+            };
+            setActivities(prev => [newActivity, ...prev]);
+
+            // Save to Local Storage as Custom Pool
+            setCustomPools(prev => [...prev, poolConfig]);
+
             setTimeout(() => { refetchPool(); }, 5000);
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,6 +330,16 @@ export function PoolManager() {
                             INITIALIZE
                         </div>
                     </button>
+                    <button
+                        className={`px-4 py-2 rounded-lg font-display tracking-widest text-sm transition-all duration-300 border ${activeTab === 'activity' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setActiveTab('activity')}
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-lg">history</span>
+                            ACTIVITY
+                            {mounted && activities.length > 0 && <span className="w-2 h-2 rounded-full bg-indigo-500"></span>}
+                        </div>
+                    </button>
                 </div>
             </div>
 
@@ -290,38 +377,52 @@ export function PoolManager() {
                                         </tr>
                                     </thead>
                                     <tbody className="text-sm">
-                                        {officialPoolKeys.map((pool, i) => {
-                                            const status = officialPoolsStatus?.[i];
+                                        {allPoolKeys.map((pool, i) => {
+                                            const status = poolsStatus?.[i];
                                             const rawValue = (status && status.status === "success") ? status.result : "0x00";
                                             const isLive = hexToBigInt(rawValue as `0x${string}`) !== 0n;
 
                                             const t0 = getTokenByAddress(pool.token0);
                                             const t1 = getTokenByAddress(pool.token1);
 
+                                            // Fallback for unknown tokens (imported)
+                                            const symbol0 = t0?.symbol || truncateAddress(pool.token0);
+                                            const symbol1 = t1?.symbol || truncateAddress(pool.token1);
+
                                             let displayPrice = "-";
                                             if (isLive) {
                                                 const val = hexToBigInt(rawValue as `0x${string}`);
                                                 const sqrtP = val & ((1n << 160n) - 1n);
-                                                displayPrice = sqrtPriceToPrice(sqrtP, 18, 6);
+                                                // Default decimals if unknown
+                                                const d0 = t0?.decimals || 18;
+                                                const d1 = t1?.decimals || 18;
+                                                displayPrice = sqrtPriceToPrice(sqrtP, d0, d1);
                                             }
 
                                             const isSelected = pool.token0.toLowerCase() === poolConfig.token0.toLowerCase() &&
                                                 pool.token1.toLowerCase() === poolConfig.token1.toLowerCase() &&
                                                 pool.fee === poolConfig.fee;
 
+                                            // Check if it's a custom pool to allow removal
+                                            const isCustom = i >= OFFICIAL_POOL_KEYS.length;
+                                            const customIndex = i - OFFICIAL_POOL_KEYS.length;
+
                                             return (
                                                 <tr key={i} className={`border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group ${isSelected ? "bg-primary/5" : ""}`}>
                                                     <td className="pl-6 py-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="flex -space-x-3">
-                                                                <div className="w-8 h-8 rounded-full border-2 border-background-dark bg-neutral-800 flex items-center justify-center overflow-hidden">
+                                                                <div className="w-8 h-8 rounded-full border-2 border-background-dark bg-neutral-800 flex items-center justify-center overflow-hidden relative">
                                                                     {t0?.logo ? <Image src={t0.logo} alt="T0" fill className="object-cover" unoptimized /> : <div className="bg-neutral w-full h-full"></div>}
                                                                 </div>
                                                                 <div className="w-8 h-8 rounded-full border-2 border-background-dark bg-neutral-800 flex items-center justify-center overflow-hidden relative">
                                                                     {t1?.logo ? <Image src={t1.logo} alt="T1" fill className="object-cover" unoptimized /> : <div className="bg-neutral w-full h-full"></div>}
                                                                 </div>
                                                             </div>
-                                                            <span className="font-bold text-white font-display tracking-wide">{t0?.symbol}/{t1?.symbol}</span>
+                                                            <div className="flex flex-col">
+                                                                <span className="font-bold text-white font-display tracking-wide">{symbol0}/{symbol1}</span>
+                                                                <span className="text-[10px] text-text-muted font-mono">{t0?.address.slice(0, 4)}.../{t1?.address.slice(0, 4)}...</span>
+                                                            </div>
                                                         </div>
                                                     </td>
                                                     <td className="font-mono text-text-muted">{(pool.fee / 10000).toFixed(2)}%</td>
@@ -346,15 +447,29 @@ export function PoolManager() {
                                                         )}
                                                     </td>
                                                     <td className="text-right pr-6">
-                                                        <button
-                                                            className={`btn btn-xs font-mono h-8 min-h-0 rounded border-white/10 hover:border-primary hover:text-primary ${isSelected ? "btn-primary text-black hover:text-black no-animation" : "btn-ghost text-text-muted"}`}
-                                                            onClick={() => {
-                                                                setPoolConfig(pool);
-                                                                setActiveTab('create');
-                                                            }}
-                                                        >
-                                                            {isSelected ? "SELECTED" : "MANAGE"}
-                                                        </button>
+                                                        <div className="flex justify-end gap-2">
+                                                            {isCustom && (
+                                                                <button
+                                                                    className="btn btn-xs btn-ghost btn-square text-text-muted hover:text-rose-500"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        removeCustomPool(customIndex);
+                                                                    }}
+                                                                    title="Remove from list"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-sm">delete</span>
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                className={`btn btn-xs font-mono h-8 min-h-0 rounded border-white/10 hover:border-primary hover:text-primary ${isSelected ? "btn-primary text-black hover:text-black no-animation" : "btn-ghost text-text-muted"}`}
+                                                                onClick={() => {
+                                                                    setPoolConfig(pool);
+                                                                    setActiveTab('create');
+                                                                }}
+                                                            >
+                                                                {isSelected ? "SELECTED" : "MANAGE"}
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             );
@@ -382,7 +497,7 @@ export function PoolManager() {
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
                                                         {token0?.logo && <Image src={token0.logo} alt={token0.symbol} width={20} height={20} className="rounded-full shrink-0" unoptimized />}
-                                                        <span className="font-bold text-white group-hover:text-primary transition-colors truncate">{token0?.symbol || "Select"}</span>
+                                                        <span className="font-bold text-white group-hover:text-primary transition-colors truncate">{token0?.symbol || truncateAddress(poolConfig.token0)}</span>
                                                     </div>
                                                     <span className="material-symbols-outlined text-text-muted text-lg shrink-0">expand_more</span>
                                                 </button>
@@ -395,7 +510,7 @@ export function PoolManager() {
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
                                                         {token1?.logo && <Image src={token1.logo} alt={token1.symbol} width={20} height={20} className="rounded-full shrink-0" unoptimized />}
-                                                        <span className="font-bold text-white group-hover:text-primary transition-colors truncate">{token1?.symbol || "Select"}</span>
+                                                        <span className="font-bold text-white group-hover:text-primary transition-colors truncate">{token1?.symbol || truncateAddress(poolConfig.token1)}</span>
                                                     </div>
                                                     <span className="material-symbols-outlined text-text-muted text-lg shrink-0">expand_more</span>
                                                 </button>
@@ -424,12 +539,25 @@ export function PoolManager() {
                                             </div>
                                         </div>
 
-                                        {/* Fee Tier Display */}
+                                        {/* Fee Tier Display (Now Editable) */}
                                         <div className="flex justify-between items-center px-2 py-3 border-t border-white/5">
                                             <span className="text-sm font-mono text-text-muted">Fee Tier</span>
-                                            <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-mono text-white">
-                                                {poolConfig.fee / 10000}%
-                                            </span>
+                                            <select
+                                                className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-mono text-white outline-none focus:border-primary/50 cursor-pointer appearance-none text-right"
+                                                value={poolConfig.fee}
+                                                onChange={(e) => {
+                                                    const newFee = Number(e.target.value);
+                                                    setPoolConfig({
+                                                        ...poolConfig,
+                                                        fee: newFee,
+                                                        tickSpacing: FEERATE_TO_TICKSPACING[newFee] || 60
+                                                    });
+                                                }}
+                                            >
+                                                <option value={500}>0.05%</option>
+                                                <option value={3000}>0.30%</option>
+                                                <option value={10000}>1.00%</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
@@ -443,7 +571,7 @@ export function PoolManager() {
                                             <label className="block">
                                                 <div className="flex justify-between mb-2">
                                                     <span className="text-xs font-mono text-text-muted">Starting Price</span>
-                                                    <span className="text-xs font-mono text-primary truncate ml-2">1 {token0?.symbol} = {price} {token1?.symbol}</span>
+                                                    <span className="text-xs font-mono text-primary truncate ml-2">1 {token0?.symbol || "T0"} = {price} {token1?.symbol || "T1"}</span>
                                                 </div>
                                                 <div className="relative group">
                                                     <input
@@ -455,7 +583,7 @@ export function PoolManager() {
                                                         disabled={isPoolInitialized}
                                                     />
                                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 px-2 py-1 rounded bg-white/10 text-xs font-mono text-text-muted pointer-events-none">
-                                                        {token1?.symbol}
+                                                        {token1?.symbol || "T1"}
                                                     </div>
                                                 </div>
                                             </label>
@@ -504,6 +632,52 @@ export function PoolManager() {
                                         </button>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Tab Content: Activity Log */}
+                        {activeTab === 'activity' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[300px]">
+                                {mounted && activities.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {activities.map((activity) => (
+                                            <a
+                                                key={activity.id}
+                                                href={`https://sepolia.unichain.org/tx/${activity.hash}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-primary/20 transition-all group"
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-white/10 ${activity.type === 'INITIALIZE' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-primary/10 text-primary'}`}>
+                                                            <span className="material-symbols-outlined">
+                                                                {activity.type === 'INITIALIZE' ? 'rocket_launch' : 'swap_horiz'}
+                                                            </span>
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-white text-sm group-hover:text-primary transition-colors">
+                                                                {activity.description}
+                                                            </div>
+                                                            <div className="text-xs text-text-muted font-mono mt-1">
+                                                                {new Date(activity.timestamp).toLocaleString()}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 text-xs font-mono text-text-muted group-hover:text-white transition-colors">
+                                                        View on Explorer
+                                                        <span className="material-symbols-outlined text-sm">open_in_new</span>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-20 text-text-muted opacity-50">
+                                        <span className="material-symbols-outlined text-5xl mb-4">history_toggle_off</span>
+                                        <p className="font-display tracking-widest uppercase text-sm">No Activity Recorded</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>
