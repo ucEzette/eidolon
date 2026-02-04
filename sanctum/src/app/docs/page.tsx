@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Navbar } from "@/components/sanctum/Navbar";
 
 export default function DocsPage() {
@@ -68,6 +69,14 @@ export default function DocsPage() {
                                         className={`text-sm transition-colors hover:text-white ${activeSection === "components" ? "text-primary font-bold" : "text-text-muted"}`}
                                     >
                                         Key Components
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        onClick={() => scrollToSection("schematics")}
+                                        className={`text-sm transition-colors hover:text-white ${activeSection === "schematics" ? "text-primary font-bold" : "text-text-muted"}`}
+                                    >
+                                        Schematics
                                     </button>
                                 </li>
                             </ul>
@@ -166,17 +175,113 @@ export default function DocsPage() {
                             </p>
 
                             {/* Diagram Container */}
-                            <div className="w-full aspect-video rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-2xl relative group">
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    {/* Placeholder for the diagram image if we had one active, for now keeping it Clean CSS or text based representation */}
-                                    <div className="p-8 text-center text-text-muted/50">
-                                        <p className="font-mono text-sm">[Architecture Diagram Representation]</p>
-                                        <div className="grid grid-cols-5 gap-4 mt-8 opacity-70">
-                                            <div className="p-4 border border-white/10 rounded bg-white/5">User Wallet</div>
-                                            <div className="flex items-center justify-center">→ (Sign) →</div>
-                                            <div className="p-4 border border-primary/30 rounded bg-primary/10 text-primary">Permit2</div>
-                                            <div className="flex items-center justify-center">→ (Hook) →</div>
-                                            <div className="p-4 border border-accent/30 rounded bg-accent/10 text-accent">Uniswap V4</div>
+                            {/* Interactive Diagram Container */}
+                            <div className="w-full rounded-2xl border border-white/10 bg-[#050505] p-8 md:p-12 relative overflow-hidden">
+                                {/* Background Grid & Glow */}
+                                <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10"></div>
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-primary/5 blur-[100px] rounded-full"></div>
+
+                                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6 md:gap-4">
+
+                                    {/* Node 1: User */}
+                                    <div className="flex flex-col items-center gap-4 group">
+                                        <div className="w-20 h-20 rounded-2xl bg-[#0a0a0a] border border-white/10 flex items-center justify-center shadow-2xl relative z-10 group-hover:border-primary/50 transition-colors duration-500">
+                                            <span className="material-symbols-outlined text-3xl text-white group-hover:text-primary transition-colors">account_balance_wallet</span>
+                                            <div className="absolute -top-3 right-3 bg-primary/10 border border-primary/20 text-primary text-[10px] uppercase font-bold px-2 py-0.5 rounded-full">MsgSender</div>
+                                        </div>
+                                        <div className="text-center">
+                                            <h4 className="text-white font-bold text-sm">User Wallet</h4>
+                                            <p className="text-xs text-text-muted mt-1">Signs Intent</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Arrow 1 */}
+                                    <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                                        <div className="h-[2px] w-full bg-gradient-to-r from-white/5 via-white/20 to-white/5 relative hidden md:block">
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 bg-[#050505] border border-white/10 rounded-full flex items-center justify-center z-10">
+                                                <span className="material-symbols-outlined text-[10px] text-text-muted">key</span>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] text-text-muted uppercase tracking-widest">Off-Chain</span>
+                                        <span className="material-symbols-outlined text-white/20 md:hidden">arrow_downward</span>
+                                    </div>
+
+                                    {/* Node 2: Bot */}
+                                    <div className="flex flex-col items-center gap-4 group">
+                                        <div className="w-20 h-20 rounded-2xl bg-[#0a0a0a] border border-white/10 flex items-center justify-center shadow-2xl relative z-10 group-hover:border-accent/50 transition-colors duration-500">
+                                            <span className="material-symbols-outlined text-3xl text-white group-hover:text-accent transition-colors">smart_toy</span>
+                                        </div>
+                                        <div className="text-center">
+                                            <h4 className="text-white font-bold text-sm">Executor Bot</h4>
+                                            <p className="text-xs text-text-muted mt-1">Pays Gas</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Arrow 2 */}
+                                    <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                                        <div className="h-[2px] w-full bg-gradient-to-r from-accent/20 via-accent to-primary/20 relative hidden md:block">
+                                            <div className="absolute top-0 right-0 -translate-y-[5px] translate-x-1">
+                                                <div className="w-0 h-0 border-t-[6px] border-t-transparent border-l-[10px] border-l-accent border-b-[6px] border-b-transparent"></div>
+                                            </div>
+                                        </div>
+                                        <span className="text-[10px] text-accent uppercase tracking-widest font-bold">Transaction</span>
+                                        <span className="material-symbols-outlined text-accent md:hidden">arrow_downward</span>
+                                    </div>
+
+                                    {/* Node 3: Hook */}
+                                    <div className="flex flex-col items-center gap-4 group">
+                                        <div className="w-24 h-24 rounded-2xl bg-[#0F172A] border border-primary flex flex-col items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.2)] relative z-10 overflow-hidden">
+                                            <div className="absolute inset-0 bg-primary/10 animate-pulse"></div>
+                                            <span className="material-symbols-outlined text-4xl text-primary relative z-10">webhook</span>
+                                            <p className="text-[10px] font-mono text-primary/80 mt-1 relative z-10">EidolonHook</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <h4 className="text-white font-bold text-sm">Validation</h4>
+                                            <p className="text-xs text-text-muted mt-1">JIT Liquidity</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Arrow 3 */}
+                                    <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                                        <div className="h-[2px] w-full bg-gradient-to-r from-primary/20 via-primary to-white/5 relative hidden md:block"></div>
+                                        <span className="text-[10px] text-primary uppercase tracking-widest">Swap</span>
+                                        <span className="material-symbols-outlined text-primary md:hidden">arrow_downward</span>
+                                    </div>
+
+                                    {/* Node 4: Uniswap */}
+                                    <div className="flex flex-col items-center gap-4 group">
+                                        <div className="w-20 h-20 rounded-2xl bg-[#0a0a0a] border border-white/10 flex items-center justify-center shadow-2xl relative z-10 group-hover:border-pink-500/50 transition-colors duration-500">
+                                            <span className="material-symbols-outlined text-3xl text-white group-hover:text-pink-500 transition-colors">swap_calls</span>
+                                        </div>
+                                        <div className="text-center">
+                                            <h4 className="text-white font-bold text-sm">Uniswap V4</h4>
+                                            <p className="text-xs text-text-muted mt-1">Execution</p>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                {/* Flow Annotations */}
+                                <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-white/5 pt-8">
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-white/5 flex items-center justify-center text-xs font-mono text-white/50 border border-white/10">1</div>
+                                        <div>
+                                            <p className="text-white text-sm font-bold">Signature Verification</p>
+                                            <p className="text-text-muted text-xs leading-relaxed mt-1">Hook verifies `Permit2 Witness` signature matches exact pool parameters.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-mono text-primary border border-primary/20">2</div>
+                                        <div>
+                                            <p className="text-white text-sm font-bold">JIT Materialization</p>
+                                            <p className="text-text-muted text-xs leading-relaxed mt-1">Liquidity is pulled from user wallet ONLY for the exact duration of the swap.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-xs font-mono text-accent border border-accent/20">3</div>
+                                        <div>
+                                            <p className="text-white text-sm font-bold">Atomic Settlement</p>
+                                            <p className="text-text-muted text-xs leading-relaxed mt-1">Principal + Yield works are returned to user in the same block. Zero TVL left behind.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -199,6 +304,37 @@ export default function DocsPage() {
                                     <h3 className="text-lg font-bold text-white mb-2">4. Settle</h3>
                                     <p className="text-sm text-text-muted">The swap executes, fees are earned, and principal + profit is atomically returned in the same block.</p>
                                 </div>
+                            </div>
+                        </section>
+
+                        {/* Technical Schematics */}
+                        <section id="schematics" className="space-y-8 scroll-mt-32">
+                            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                                <span className="text-primary">#</span> Technical Schematics
+                            </h2>
+                            <p className="text-lg text-text-muted">
+                                Detailed system architecture and data models for advanced integration.
+                            </p>
+
+                            <div className="grid grid-cols-1 gap-8">
+                                {/* Architecture Diagram */}
+                                <div className="rounded-2xl border border-white/10 bg-[#050505] overflow-hidden group">
+                                    <div className="p-6 border-b border-white/5 bg-white/5">
+                                        <h3 className="text-lg font-bold text-white">System Architecture</h3>
+                                        <p className="text-sm text-text-muted mt-1">High-level view of the off-chain/on-chain interaction model.</p>
+                                    </div>
+                                    <div className="relative aspect-video w-full bg-[#020202] p-4">
+                                        <Image
+                                            src="/architecture-flow.png"
+                                            alt="Eidolon System Architecture"
+                                            fill
+                                            className="object-contain"
+                                            unoptimized
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Entity Diagram - REMOVED */}
                             </div>
                         </section>
 
