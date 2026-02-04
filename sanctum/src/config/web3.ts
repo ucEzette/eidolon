@@ -3,7 +3,7 @@
 import { http, createConfig } from "wagmi";
 import { type Chain } from "viem";
 import { mainnet } from "wagmi/chains";
-import { injected, walletConnect, metaMask, coinbaseWallet } from "wagmi/connectors";
+import { injected, walletConnect, coinbaseWallet } from "wagmi/connectors";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // UNICHAIN SEPOLIA CHAIN DEFINITION

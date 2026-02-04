@@ -66,9 +66,9 @@ const config: Config = {
                 }
             },
             fontFamily: {
-                display: ["var(--font-orbitron)", "sans-serif"],
+                display: ["var(--font-outfit)", "sans-serif"],
                 mono: ["var(--font-jetbrains-mono)", "monospace"],
-                sans: ["var(--font-inter)", "sans-serif"],
+                sans: ["var(--font-outfit)", "sans-serif"],
             },
         },
     },
