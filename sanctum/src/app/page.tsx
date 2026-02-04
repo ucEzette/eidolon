@@ -18,18 +18,15 @@ export default function Home() {
 
       {/* Main Content: The Summoning Interface */}
       <div className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-80px)] px-4 py-8 md:py-12">
-        <div className="w-full max-w-[1200px] grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="w-full max-w-[1200px] flex flex-col gap-12 items-center">
 
-          {/* Left Column: Summoning Portal (Main Action) */}
-          <div className="lg:col-span-7 flex flex-col items-center lg:items-end">
+          {/* Summoning Portal (Main Action) */}
+          <div className="w-full flex justify-center">
             <SummoningPortal />
           </div>
 
-          {/* Right Column: Pool Manager (Context/Secondary) */}
-          <div className="lg:col-span-5 flex flex-col items-center lg:items-start pt-8 lg:pt-0">
-            {/* Visual Connector for Desktop */}
-            <div className="hidden lg:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-0 h-[80%] w-[1px] bg-gradient-to-b from-transparent via-white/10 to-transparent"></div>
-
+          {/* Pool Manager (Context/Secondary) - Landscape Mode */}
+          <div className="w-full">
             <PoolManager />
           </div>
         </div>

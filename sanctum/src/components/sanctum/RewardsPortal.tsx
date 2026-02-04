@@ -109,7 +109,7 @@ export function RewardsPortal() {
                                             {/* Earned Rewards */}
                                             <td className="px-6 py-4 text-right">
                                                 <div className="font-mono font-bold text-cyan-400 text-lg">
-                                                    {rewards.toFixed(6)} EIDOLON
+                                                    {rewards.toFixed(6)} {pos.tokenB}
                                                 </div>
                                                 <div className="text-xs text-white/30">
                                                     ≈ ${(rewards * 0.45).toFixed(2)}
