@@ -50,8 +50,6 @@ export function getSqrtPriceX96(
     // Correction: Valid price input usually assumes Human Readable.
     // We convert Human Price to Raw Price.
 
-    const decimalShift = BigInt(token1Decimals) - BigInt(token0Decimals);
-
     // We can do this roughly with number for UI entry or use a library
     // Let's use a robust approximation for the UI:
 

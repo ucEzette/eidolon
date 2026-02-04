@@ -150,6 +150,7 @@ export function useGhostPermit() {
                 isDualSided
             };
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (err: any) {
             console.error("Error signing permit:", err);
             // Return raw error message for better debugging

@@ -28,7 +28,7 @@ export const RelayerDB = {
         }
     },
 
-    getOrdersByUser: (userAddress: string): GhostPosition[] => {
+    getOrdersByUser: (_userAddress: string): GhostPosition[] => {
         // Simple filter, assuming we store user address in the permit or can infer it.
         // The GhostPosition struct doesn't explicitly have "maker" at top level, 
         // but it's part of the signature. For now, we'll return all and let client filter 

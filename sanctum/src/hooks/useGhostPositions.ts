@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { type SignedGhostPermit } from "./useGhostPermit";
 
 export interface GhostPosition {
     id: string;
@@ -22,8 +21,6 @@ export interface GhostPosition {
     hookAddress: string;
     txHash?: string;
 }
-
-const STORAGE_KEY = "eidolon_ghost_positions";
 
 export function useGhostPositions() {
     const [positions, setPositions] = useState<GhostPosition[]>([]);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAccount, usePublicClient } from 'wagmi';
-import { parseAbiItem, Log, formatUnits } from 'viem';
+import { parseAbiItem, formatUnits } from 'viem';
 import { CONTRACTS } from '@/config/web3';
 
 // Canonical Permit2 Address
