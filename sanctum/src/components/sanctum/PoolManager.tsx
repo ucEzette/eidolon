@@ -17,6 +17,10 @@ const POOL_MANAGER_ABI = parseAbi([
     "function extsload(bytes32 slot) external view returns (bytes32 value)"
 ]);
 
+const ROUTER_ABI = parseAbi([
+    "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, (bool takeClaims, bool settleUsingBurn) testSettings, bytes hookData) external payable returns (int256 delta)"
+]);
+
 // Helper to calculate storage slot for _pools[poolId] (Slot 6)
 const POOL_STORAGE_SLOT = 6n;
 function getPoolStateSlot(poolId: Address) {
@@ -101,7 +105,11 @@ export function PoolManager() {
     const { writeContractAsync } = useWriteContract();
 
     // Removed isExpanded state - Always visible
-    const [activeTab, setActiveTab] = useState<'list' | 'create' | 'activity'>('list'); // Tab state
+    const [activeTab, setActiveTab] = useState<'list' | 'create' | 'swap' | 'activity'>('list'); // Tab state
+
+    // Swap State
+    const [swapAmount, setSwapAmount] = useState("1.0");
+    const [zeroForOne, setZeroForOne] = useState(true);
 
     // Mounted check for hydration safety
     const [mounted, setMounted] = useState(false);
@@ -211,6 +219,49 @@ export function PoolManager() {
         }
     });
 
+    // Estimation Logic for Test Swap
+    const estimatedOutput = useMemo(() => {
+        if (!poolStateData || !swapAmount || isNaN(Number(swapAmount))) return null;
+
+        const val = hexToBigInt(poolStateData as `0x${string}`);
+        if (val === 0n) return null; // Uninitialized
+
+        const sqrtP = val & ((1n << 160n) - 1n);
+
+        const tA = getTokenByAddress(poolConfig.token0);
+        const tB = getTokenByAddress(poolConfig.token1);
+
+        if (!tA || !tB) return null;
+
+        // Canonical Sorting to match PoolKey
+        const [c0, c1] = tA.address.toLowerCase() < tB.address.toLowerCase() ? [tA, tB] : [tB, tA];
+
+        // Price of C0 in terms of C1 (How much C1 for 1 C0)
+        const priceC0inC1 = Number(sqrtPriceToPrice(sqrtP, c0.decimals, c1.decimals));
+
+        const amountIn = Number(swapAmount);
+        const isTA_C0 = tA.address.toLowerCase() === c0.address.toLowerCase();
+
+        // Determine if input is C0 or C1
+        // zeroForOne (UI State) means Input is poolConfig.token0 (tA)
+        // !zeroForOne (UI State) means Input is poolConfig.token1 (tB)
+        const isInputC0 = (zeroForOne && isTA_C0) || (!zeroForOne && !isTA_C0);
+
+        let out = 0;
+        if (isInputC0) {
+            // Selling C0 -> Buying C1 (Multiply by Price)
+            out = amountIn * priceC0inC1;
+        } else {
+            // Selling C1 -> Buying C0 (Divide by Price)
+            out = amountIn / priceC0inC1;
+        }
+
+        // Format based on the output token
+        // If input is C0, output is C1. If input is C1, output is C0.
+        // But specifically we want to format nicely.
+        return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
+    }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1]);
+
     const handleInitialize = async () => {
         if (!isConnected) {
             toast.error("Wallet not connected", { description: "Please connect your wallet to initialize a pool." });
@@ -289,6 +340,90 @@ export function PoolManager() {
     const token0 = getTokenByAddress(poolConfig.token0);
     const token1 = getTokenByAddress(poolConfig.token1);
 
+    const handleSwap = async () => {
+        if (!isConnected) {
+            toast.error("Wallet not connected");
+            return;
+        }
+
+        if (isWrongNetwork) {
+            handleSwitchNetwork();
+            return;
+        }
+
+        try {
+            const t0 = getTokenByAddress(poolConfig.token0);
+            const t1 = getTokenByAddress(poolConfig.token1);
+
+            if (!t0 || !t1) {
+                toast.error("Invalid token selection");
+                return;
+            }
+
+            // Construct Key
+            const [c0, c1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+                ? [poolConfig.token0, poolConfig.token1]
+                : [poolConfig.token1, poolConfig.token0];
+
+            // Adjust zeroForOne based on canonical ordering
+            const isT0Currency0 = poolConfig.token0.toLowerCase() === c0.toLowerCase();
+            const actualZeroForOne = isT0Currency0 ? zeroForOne : !zeroForOne;
+
+            const key = {
+                currency0: c0 as `0x${string}`,
+                currency1: c1 as `0x${string}`,
+                fee: poolConfig.fee,
+                tickSpacing: poolConfig.tickSpacing,
+                hooks: poolConfig.hooks as `0x${string}`
+            };
+
+            const amountWei = BigInt(Math.floor(Number(swapAmount) * (10 ** (zeroForOne ? t0.decimals : t1.decimals))));
+            // Negative amountSpecified means Exact Input
+            const amountSpecified = -amountWei;
+
+            // Price Limits (No limit)
+            const MIN_SQRT_PRICE = 4295128739n;
+            const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n;
+            const sqrtPriceLimitX96 = actualZeroForOne ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n;
+
+            const params = {
+                zeroForOne: actualZeroForOne,
+                amountSpecified,
+                sqrtPriceLimitX96
+            };
+
+            const testSettings = {
+                takeClaims: false,
+                settleUsingBurn: false
+            };
+
+            // @ts-ignore
+            const hash = await writeContractAsync({
+                address: CONTRACTS.unichainSepolia.router as `0x${string}`, // PoolSwapTest
+                abi: ROUTER_ABI,
+                functionName: "swap",
+                args: [key, params, testSettings, "0x"],
+                value: actualZeroForOne && c0 === "0x0000000000000000000000000000000000000000" ? amountWei : 0n // Send ETH if paying in ETH
+            });
+
+            toast.success("Swap Sent", { description: `Swapping ${swapAmount} ${zeroForOne ? t0.symbol : t1.symbol}` });
+
+            // Add Activity
+            const newActivity: Activity = {
+                id: crypto.randomUUID(),
+                type: 'SWAP',
+                description: `Swapped ${swapAmount} ${zeroForOne ? t0.symbol : t1.symbol} for ${zeroForOne ? t1.symbol : t0.symbol}`,
+                hash: hash,
+                timestamp: Date.now()
+            };
+            setActivities(prev => [newActivity, ...prev]);
+
+        } catch (e: any) {
+            console.error(e);
+            toast.error("Swap Failed", { description: e.shortMessage || e.message });
+        }
+    };
+
     return (
         <div className="w-full mt-0 transition-all duration-500 ease-in-out border border-border-dark rounded-2xl overflow-hidden backdrop-blur-xl bg-card-dark shadow-glow shadow-primary/10">
             <TokenSelector
@@ -333,6 +468,24 @@ export function PoolManager() {
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-lg">add_circle</span>
                             INITIALIZE
+                        </div>
+                    </button>
+                    <button
+                        className={`px-4 py-2 rounded-lg font-display tracking-widest text-sm transition-all duration-300 border ${activeTab === 'create' ? 'bg-accent/20 border-accent text-accent' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setActiveTab('create')}
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-lg">add_circle</span>
+                            INITIALIZE
+                        </div>
+                    </button>
+                    <button
+                        className={`px-4 py-2 rounded-lg font-display tracking-widest text-sm transition-all duration-300 border ${activeTab === 'swap' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setActiveTab('swap')}
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-lg">swap_horiz</span>
+                            TEST SWAP
                         </div>
                     </button>
                     <button
@@ -646,6 +799,62 @@ export function PoolManager() {
                             </div>
                         )}
 
+                        {/* Tab Content: Swap */}
+                        {activeTab === 'swap' && (
+                            <div className="p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <h3 className="text-xl font-display text-emerald-400 mb-4 tracking-widest uppercase">Test Pool Hooks</h3>
+                                <p className="text-sm text-text-muted mb-6">
+                                    Perform a test swap directly against this specific Pool Key. This guarantees your <span className="text-primary font-mono">EidolonHook</span> logic is executed, unlike generic DEX routers.
+                                </p>
+
+                                <div className="space-y-6 max-w-md mx-auto">
+                                    <div className="bg-black/40 p-4 rounded-xl border border-white/10">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-medium text-white/60">Amount In</span>
+                                            <span className="text-xs font-bold text-white">{zeroForOne ? token0?.symbol : token1?.symbol}</span>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={swapAmount}
+                                            onChange={(e) => setSwapAmount(e.target.value)}
+                                            className="w-full bg-transparent text-2xl font-mono text-white outline-none placeholder:text-white/20"
+                                            placeholder="0.0"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-center">
+                                        <button
+                                            onClick={() => setZeroForOne(!zeroForOne)}
+                                            className="p-2 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-white/80">arrow_downward</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="bg-black/40 p-4 rounded-xl border border-white/10 opacity-60">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-medium text-white/60">To (Estimated)</span>
+                                            <span className="text-xs font-bold text-white">{zeroForOne ? token1?.symbol : token0?.symbol}</span>
+                                        </div>
+                                        <div className="text-2xl font-mono text-white/50">
+                                            {estimatedOutput ? (
+                                                <span className="text-emerald-400">~{estimatedOutput}</span>
+                                            ) : (
+                                                <span className="animate-pulse">?</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={handleSwap}
+                                        className="w-full py-4 mt-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-display tracking-widest rounded-xl transition-all shadow-glow hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                                    >
+                                        SWAP VIA EIDOLON ROUTER
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Tab Content: Activity Log */}
                         {activeTab === 'activity' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[300px]">
@@ -654,7 +863,7 @@ export function PoolManager() {
                                         {activities.map((activity) => (
                                             <a
                                                 key={activity.id}
-                                                href={`https://sepolia.unichain.org/tx/${activity.hash}`}
+                                                href={`https://unichain-sepolia.blockscout.com/tx/${activity.hash}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="block p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-primary/20 transition-all group"

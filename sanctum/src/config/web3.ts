@@ -65,6 +65,7 @@ export const CONTRACTS = {
         eidolonHook: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8" as `0x${string}`,
         permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as `0x${string}`,
         poolManager: "0x00B036B58a818B1BC34d502D3fE730Db729e62AC" as `0x${string}`,
+        router: "0x85C5c8769D9da8eB727Ca205de0119bDaB5D6495" as `0x${string}`,
     },
 } as const;
 
