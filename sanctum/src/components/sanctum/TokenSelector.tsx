@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState } from 'react';
-import { TOKENS } from '@/config/tokens';
+import React from 'react';
+import { TOKENS, type Token } from '@/config/tokens';
 import { useAccount, useBalance } from 'wagmi';
 
 interface TokenSelectorProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelect: (token: any) => void;
+    onSelect: (token: Token) => void;
 }
 
 export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps) {
@@ -71,7 +71,7 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
     );
 }
 
-function TrendingChip({ symbol, change, isPositive }: any) {
+function TrendingChip({ symbol, change, isPositive }: { symbol: string, change: string, isPositive?: boolean }) {
     return (
         <button className="group flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 border border-white/5 transition-all hover:bg-white/10 hover:border-cyan-400/50 hover:shadow-[0_0_10px_rgba(34,211,238,0.2)]">
             <span className="text-sm font-medium text-white">{symbol}</span>
@@ -85,7 +85,7 @@ function TrendingChip({ symbol, change, isPositive }: any) {
     )
 }
 
-function TokenRow({ token, onSelect }: { token: any, onSelect: () => void }) {
+function TokenRow({ token, onSelect }: { token: Token, onSelect: () => void }) {
     const { address } = useAccount();
     const { data: balance } = useBalance({
         address: address,

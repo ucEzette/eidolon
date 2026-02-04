@@ -125,7 +125,18 @@ export function DeepAnalyticsHub() {
     );
 }
 
-function AnalyticsCard({ label, value, unit, unitColor, chartPath, fillId, color, strokeDash }: any) {
+interface AnalyticsCardProps {
+    label: string;
+    value: string;
+    unit: string;
+    unitColor: string;
+    chartPath: string;
+    fillId: string;
+    color: string;
+    strokeDash?: string;
+}
+
+function AnalyticsCard({ label, value, unit, unitColor, chartPath, fillId, color, strokeDash }: AnalyticsCardProps) {
     return (
         <div className="bg-[#101f22]/40 rounded-xl p-5 border border-white/5 flex flex-col justify-between group hover:border-cyan-500/40 transition-colors">
             <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { TOKENS, type Token } from "@/config/tokens";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS, unichainSepolia } from "@/config/web3";
@@ -77,7 +78,7 @@ export function PoolManager() {
     const isWrongNetwork = chainId !== unichainSepolia.id;
 
     useEffect(() => {
-        if (isConnected && isWrongNetwork && switchChain) {
+        if (isConnected && isWrongNetwork) {
             // Optional: Auto-switch logic
         }
     }, [isConnected, isWrongNetwork, switchChain]);
@@ -186,7 +187,7 @@ export function PoolManager() {
                 hooks: poolConfig.hooks as `0x${string}`
             };
 
-            const tx = await writeContractAsync({
+            await writeContractAsync({
                 address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
                 abi: POOL_MANAGER_ABI,
                 functionName: "initialize",
@@ -196,6 +197,7 @@ export function PoolManager() {
             toast.success("Transaction Sent", { description: "Initializing Pool..." });
             setTimeout(() => { refetchPool(); }, 5000);
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (e: any) {
             console.error(e);
             toast.error("Initialization Failed", { description: e.shortMessage || e.message || "Unknown error" });
@@ -313,10 +315,10 @@ export function PoolManager() {
                                                         <div className="flex items-center gap-3">
                                                             <div className="flex -space-x-3">
                                                                 <div className="w-8 h-8 rounded-full border-2 border-background-dark bg-neutral-800 flex items-center justify-center overflow-hidden">
-                                                                    {t0?.logo ? <img src={t0.logo} alt="T0" /> : <div className="bg-neutral w-full h-full"></div>}
+                                                                    {t0?.logo ? <Image src={t0.logo} alt="T0" fill className="object-cover" unoptimized /> : <div className="bg-neutral w-full h-full"></div>}
                                                                 </div>
-                                                                <div className="w-8 h-8 rounded-full border-2 border-background-dark bg-neutral-800 flex items-center justify-center overflow-hidden">
-                                                                    {t1?.logo ? <img src={t1.logo} alt="T1" /> : <div className="bg-neutral w-full h-full"></div>}
+                                                                <div className="w-8 h-8 rounded-full border-2 border-background-dark bg-neutral-800 flex items-center justify-center overflow-hidden relative">
+                                                                    {t1?.logo ? <Image src={t1.logo} alt="T1" fill className="object-cover" unoptimized /> : <div className="bg-neutral w-full h-full"></div>}
                                                                 </div>
                                                             </div>
                                                             <span className="font-bold text-white font-display tracking-wide">{t0?.symbol}/{t1?.symbol}</span>
@@ -379,7 +381,7 @@ export function PoolManager() {
                                                     onClick={() => setSelectorType('token0')}
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
-                                                        {token0?.logo && <img src={token0.logo} className="w-5 h-5 rounded-full shrink-0" />}
+                                                        {token0?.logo && <Image src={token0.logo} alt={token0.symbol} width={20} height={20} className="rounded-full shrink-0" unoptimized />}
                                                         <span className="font-bold text-white group-hover:text-primary transition-colors truncate">{token0?.symbol || "Select"}</span>
                                                     </div>
                                                     <span className="material-symbols-outlined text-text-muted text-lg shrink-0">expand_more</span>
@@ -392,7 +394,7 @@ export function PoolManager() {
                                                     onClick={() => setSelectorType('token1')}
                                                 >
                                                     <div className="flex items-center gap-2 overflow-hidden">
-                                                        {token1?.logo && <img src={token1.logo} className="w-5 h-5 rounded-full shrink-0" />}
+                                                        {token1?.logo && <Image src={token1.logo} alt={token1.symbol} width={20} height={20} className="rounded-full shrink-0" unoptimized />}
                                                         <span className="font-bold text-white group-hover:text-primary transition-colors truncate">{token1?.symbol || "Select"}</span>
                                                     </div>
                                                     <span className="material-symbols-outlined text-text-muted text-lg shrink-0">expand_more</span>
