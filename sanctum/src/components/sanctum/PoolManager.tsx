@@ -12,6 +12,7 @@ import { useAccount, useReadContract, useWriteContract, useWaitForTransactionRec
 import { getPoolId, getSqrtPriceX96, getPoolStateSlot, getTicksStateSlot, getTokenByAddress, sqrtPriceToPrice } from "@/utils/uniswap";
 import { parseAbi, hexToBigInt, type Address } from "viem";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
+import { useGhostPermit } from "@/hooks/useGhostPermit";
 import Link from "next/link";
 
 const POOL_MANAGER_ABI = parseAbi([
@@ -484,6 +485,10 @@ export function PoolManager() {
     const token0 = getTokenByAddress(poolConfig.token0);
     const token1 = getTokenByAddress(poolConfig.token1);
 
+    // Hooks for Intent-Based Swapping
+    const { signPermit, isPending: isSignPending } = useGhostPermit();
+    const { addPosition } = useGhostPositions();
+
     const handleSwap = async () => {
         if (!isConnected) {
             toast.error("Wallet not connected");
@@ -501,60 +506,94 @@ export function PoolManager() {
             const sym0 = t0?.symbol || truncateAddress(poolConfig.token0);
             const sym1 = t1?.symbol || truncateAddress(poolConfig.token1);
 
-            // Construct Key
-            const [c0, c1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
-                ? [poolConfig.token0, poolConfig.token1]
-                : [poolConfig.token1, poolConfig.token0];
+            // Determine Input Token
+            // If zeroForOne (Token0 -> Token1), we are selling Token0.
+            const inputToken = zeroForOne ? poolConfig.token0 : poolConfig.token1;
+            const outputToken = zeroForOne ? poolConfig.token1 : poolConfig.token0;
+            const inputSymbol = zeroForOne ? sym0 : sym1;
+            const decimals = zeroForOne ? decimals0 : decimals1;
 
-            // Adjust zeroForOne based on canonical ordering
-            const isT0Currency0 = poolConfig.token0.toLowerCase() === c0.toLowerCase();
-            const actualZeroForOne = isT0Currency0 ? zeroForOne : !zeroForOne;
+            // HANDLE ETH -> WETH for Pool ID & Permit
+            // Permit2 does NOT support native ETH. We must sign for WETH.
+            // Executor will treat ETH intents as WETH permits.
+            // IMPORTANT: The PoolID we sign must match the PoolID the bot executes against (which is WETH/USDC)
 
-            const key = {
-                currency0: c0 as `0x${string}`,
-                currency1: c1 as `0x${string}`,
+            const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+            const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+
+            let t0_calc = poolConfig.token0;
+            let t1_calc = poolConfig.token1;
+
+            if (t0_calc === ZERO_ADDRESS) t0_calc = WETH_ADDRESS;
+            if (t1_calc === ZERO_ADDRESS) t1_calc = WETH_ADDRESS;
+
+            // Canonical Sorting for WETH-normalized addresses
+            const [c0, c1] = t0_calc.toLowerCase() < t1_calc.toLowerCase()
+                ? [t0_calc, t1_calc]
+                : [t1_calc, t0_calc];
+
+            // Calculate PoolID using WETH
+            const poolId = getPoolId(
+                c0 as `0x${string}`,
+                c1 as `0x${string}`,
+                poolConfig.fee,
+                poolConfig.tickSpacing,
+                poolConfig.hooks as `0x${string}`
+            );
+
+            console.log("Generated Pool Key ID for Swap (Normalized to WETH):", poolId);
+
+            let permitToken = inputToken;
+            let permitSymbol = inputSymbol;
+
+            if (inputToken === ZERO_ADDRESS) {
+                permitToken = WETH_ADDRESS;
+                permitSymbol = "WETH"; // Ensure relayer gets "WETH"
+            }
+
+            // 2. Sign Ghost Permit (The "Intent")
+            // This authorizes the Bot to pull 'swapAmount' from user's wallet
+            const result = await signPermit(
+                permitToken as `0x${string}`,
+                swapAmount,
+                poolId,
+                false, // One-sided liquidity (User just wants to swap, effectively providing 1-sided to the pool temporarily)
+                30,    // 30 minutes validity
+                decimals
+            );
+
+            if (!result) return; // User rejected or failed
+
+            // 3. Post Intent to Relayer
+            // The Bot will pick this up, see it matches the pool, and execute the swap
+            // In a real JIT Swap, the Bot basically "fills" this order.
+
+            addPosition({
+                tokenA: permitSymbol, // Use WETH if it was ETH
+                tokenB: zeroForOne ? sym1 : sym0, // Target (Output)
+                amountA: swapAmount,
+                amountB: "0",
+                expiry: Date.now() + (30 * 60 * 1000),
+                signature: result.signature,
+                liquidityMode: 'one-sided', // Swaps are inherently one-sided inputs
+                nonce: result.nonce.toString(),
+                provider: address!,
+                poolId: poolId,
                 fee: poolConfig.fee,
                 tickSpacing: poolConfig.tickSpacing,
-                hooks: poolConfig.hooks as `0x${string}`
-            };
-
-            const amountWei = BigInt(Math.floor(Number(swapAmount) * (10 ** (zeroForOne ? decimals0 : decimals1))));
-            // Negative amountSpecified means Exact Input
-            const amountSpecified = -amountWei;
-
-            // Price Limits (No limit)
-            const MIN_SQRT_PRICE = 4295128739n;
-            const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n;
-            const sqrtPriceLimitX96 = actualZeroForOne ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n;
-
-            const params = {
-                zeroForOne: actualZeroForOne,
-                amountSpecified,
-                sqrtPriceLimitX96
-            };
-
-            const testSettings = {
-                takeClaims: false,
-                settleUsingBurn: false
-            };
-
-            // @ts-ignore
-            const hash = await writeContractAsync({
-                address: CONTRACTS.unichainSepolia.router as `0x${string}`, // PoolSwapTest
-                abi: ROUTER_ABI,
-                functionName: "swap",
-                args: [key, params, testSettings, "0x"],
-                value: actualZeroForOne && c0 === "0x0000000000000000000000000000000000000000" ? amountWei : 0n // Send ETH if paying in ETH
+                hookAddress: poolConfig.hooks
             });
 
-            toast.success("Swap Sent", { description: `Swapping ${swapAmount} ${zeroForOne ? sym0 : sym1}` });
+            toast.success("Swap Intent Submitted", {
+                description: `Bot will execute swap: ${swapAmount} ${inputSymbol} -> ${zeroForOne ? sym1 : sym0}`
+            });
 
             // Add Activity
             const newActivity: Activity = {
                 id: crypto.randomUUID(),
                 type: 'SWAP',
-                description: `Swapped ${swapAmount} ${zeroForOne ? sym0 : sym1} for ${zeroForOne ? sym1 : sym0}`,
-                hash: hash,
+                description: `Intent: Swap ${swapAmount} ${inputSymbol}`,
+                hash: "Pending...", // Bot will provide hash
                 timestamp: Date.now()
             };
             setActivities(prev => [newActivity, ...prev]);

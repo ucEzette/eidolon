@@ -3,13 +3,16 @@ import {
     createPublicClient,
     createWalletClient,
     http,
+    parseUnits,
     parseEther,
     parseAbiItem,
     encodeFunctionData,
-    encodeAbiParameters
+    encodeAbiParameters,
+    verifyTypedData,
+    Hex
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
+import { unichainSepolia } from 'viem/chains';
 import { CONFIG } from './config';
 import { GhostPosition } from './monitor';
 
@@ -56,7 +59,7 @@ export class Executor {
 
     constructor() {
         this.client = createPublicClient({
-            chain: sepolia, // Configurable
+            chain: unichainSepolia, // Configurable
             transport: http(CONFIG.RPC_URL)
         });
 
@@ -64,7 +67,7 @@ export class Executor {
 
         this.wallet = createWalletClient({
             account: this.account,
-            chain: sepolia,
+            chain: unichainSepolia,
             transport: http(CONFIG.RPC_URL)
         });
     }
@@ -78,20 +81,35 @@ export class Executor {
         console.log(`⚡ Executor: Preparing settlement for ${order.id}...`);
 
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        const USDC_ADDRESS = "0x31d0220469e10c4E71834a79b1f276d740d3768F";
+        const WETH_ADDRESS = "0x4200000000000000000000000000000000000006"; // Unichain Sepolia WETH
+
         const normalize = (addr: string) => {
             if (!addr) return ZERO_ADDRESS;
             const clean = addr.trim();
-            if (clean === "ETH") return ZERO_ADDRESS;
-            if (clean === "USDC") return "0x31d0220469e10c4E71834a79b1f276d740d3768F";
-            if (clean === "WETH") return "0x4200000000000000000000000000000000000006";
+            // Map ETH to WETH purely for the `permit.currency` field (Permit2 doesn't support ETH)
+            // But we might need to be careful if PoolKey uses ETH (0x0)
+            // Actually, for intents, the user signs for WETH.
+            if (clean === "ETH") return WETH_ADDRESS;
+            if (clean === "USDC") return USDC_ADDRESS;
+            if (clean === "WETH") return WETH_ADDRESS;
             if (clean === "eiETH") return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
+            // Check for explicit 0x0 address string
+            if (clean === ZERO_ADDRESS) return WETH_ADDRESS; // Treat Native as WETH for Token Logic
+
             // Case-insensitive check
             if (clean.toLowerCase() === "eieth") return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
             return clean;
         };
 
+        const getDecimals = (addr: string) => {
+            if (addr.toLowerCase() === USDC_ADDRESS.toLowerCase()) return 6;
+            return 18;
+        };
+
         const tokenA = normalize(order.tokenA);
         const tokenB = normalize(order.tokenB);
+        const decimalsA = getDecimals(tokenA);
 
         try {
             // 1. Construct Witness Struct (Must match WitnessLib)
@@ -99,6 +117,74 @@ export class Executor {
                 poolId: order.poolId as `0x${string}`,
                 hook: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`
             };
+
+            // VERIFY SIGNATURE LOCALLY
+            console.log("\n🔍 STARTING LOCAL VERIFICATION 🔍\n");
+            let isValid = false;
+            try {
+                isValid = await verifyTypedData({
+                    address: order.provider as `0x${string}`,
+                    domain: {
+                        name: 'Permit2',
+                        chainId: 1301,
+                        verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+                    },
+                    types: {
+                        PermitWitnessTransferFrom: [
+                            { name: "permitted", type: "TokenPermissions" },
+                            { name: "spender", type: "address" },
+                            { name: "nonce", type: "uint256" },
+                            { name: "deadline", type: "uint256" },
+                            { name: "witness", type: "WitnessData" }
+                        ],
+                        TokenPermissions: [
+                            { name: "token", type: "address" },
+                            { name: "amount", type: "uint256" }
+                        ],
+                        WitnessData: [
+                            { name: "poolId", type: "bytes32" },
+                            { name: "hook", type: "address" }
+                        ]
+                    },
+                    primaryType: 'PermitWitnessTransferFrom',
+                    message: {
+                        permitted: {
+                            token: tokenA as `0x${string}`,
+                            amount: parseUnits(order.amountA.toString(), decimalsA)
+                        },
+                        spender: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`,
+                        nonce: BigInt(order.nonce),
+                        deadline: BigInt(Math.floor(order.expiry / 1000)),
+                        witness: witness
+                    },
+                    signature: order.signature as Hex
+                });
+            } catch (err) {
+                console.error("CRITICAL: Verification crashed:", err);
+                throw new Error("Verification Logic Failed");
+            }
+
+            console.log(`   🔍 Result: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
+
+            if (!isValid) {
+                const debugMsg = `
+                CRITICAL SIGNATURE MISMATCH!
+                The data we are about to execute DOES NOT MATCH what the user signed.
+                
+                EXPECTED (What we constructed):
+                - Provider: ${order.provider}
+                - Token: ${tokenA}
+                - Amount (Wei): ${parseUnits(order.amountA.toString(), decimalsA)}
+                - PoolID: ${witness.poolId}
+                - Spender: ${CONFIG.CONTRACTS.EIDOLON_HOOK}
+                - ChainID: 1301
+                
+                USER SIGNED (From Order):
+                - Signature: ${order.signature}
+                `;
+                console.error(debugMsg);
+                throw new Error("Local Signature Verification FAILED - Data Mismatch");
+            }
 
             // 2. Encode Permit Data
             // We need to match the decode in Hook._beforeSwap:
@@ -108,7 +194,7 @@ export class Executor {
             const permit = {
                 provider: order.provider as `0x${string}`,
                 currency: tokenA as `0x${string}`,
-                amount: parseEther(order.amountA.toString()), // Handles "5.0" -> Wei
+                amount: parseUnits(order.amountA.toString(), decimalsA), // Handles correct decimals
                 poolId: order.poolId as `0x${string}`, // Added poolId field
                 deadline: BigInt(Math.floor(order.expiry / 1000)),
                 nonce: BigInt(order.nonce),
@@ -163,7 +249,7 @@ export class Executor {
             // 4. Prepare Swap Params for Executor
             // Determine swap direction: selling tokenA
             const zeroForOne = tokenA.toLowerCase() === currency0.toLowerCase();
-            const amountSpecified = -parseEther(order.amountA.toString()); // Negative = Exact Input
+            const amountSpecified = -parseUnits(order.amountA.toString(), decimalsA); // Negative = Exact Input
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
             console.log("   📝 Transaction Data Encoded.");

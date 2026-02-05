@@ -6,8 +6,7 @@ import { CONTRACTS, PERMIT2_DOMAIN } from "@/config/web3";
 import { useState } from "react";
 import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EIP-712 TYPE DEFINITIONS (Updated with isDualSided)
+// EIP-712 TYPE DEFINITIONS (Updated to match WitnessLib.sol)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const PERMIT_WITNESS_TRANSFER_FROM_TYPES = {
@@ -16,20 +15,15 @@ const PERMIT_WITNESS_TRANSFER_FROM_TYPES = {
         { name: "spender", type: "address" },
         { name: "nonce", type: "uint256" },
         { name: "deadline", type: "uint256" },
-        { name: "witness", type: "GhostPermit" },
+        { name: "witness", type: "WitnessData" },
     ],
     TokenPermissions: [
         { name: "token", type: "address" },
         { name: "amount", type: "uint256" },
     ],
-    GhostPermit: [
-        { name: "provider", type: "address" },
-        { name: "currency", type: "address" },
-        { name: "amount", type: "uint256" },
+    WitnessData: [
         { name: "poolId", type: "bytes32" },
-        { name: "deadline", type: "uint256" },
-        { name: "nonce", type: "uint256" },
-        { name: "isDualSided", type: "bool" }, // New flag
+        { name: "hook", type: "address" },
     ],
 } as const;
 
@@ -84,15 +78,10 @@ export function useGhostPermit() {
             // Get correct contract addresses
             const contracts = CONTRACTS.unichainSepolia;
 
-            // Prepare witness data (GhostPermit struct)
+            // Prepare witness data (Must match WitnessLib.WitnessData struct)
             const witness = {
-                provider: address,
-                currency: token,
-                amount: parsedAmount,
                 poolId: poolId,
-                deadline: deadline,
-                nonce: nonce,
-                isDualSided: isDualSided,
+                hook: contracts.eidolonHook,
             };
 
             const domain = {
