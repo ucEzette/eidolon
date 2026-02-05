@@ -74,13 +74,13 @@ export function SummoningPortal() {
 
         // Calculate Pool ID properly (V4)
         // Note: In a real scenario, we might query the factory to verify the pool exists
-        // V4 requires specifying the VALID fee tier. We use 10000 (1%) as the initialized pool tier
+        // V4 requires specifying the VALID fee tier. We use 3000 (0.3%) as the standard pool tier
         // plus the hook address which makes the key unique.
         const poolId = getPoolId(
             signingTokenA,
             signingTokenB,
-            10000, // Fee tier (1.0%)
-            200,   // Tick spacing
+            3000, // Fee tier (0.3%)
+            60,   // Tick spacing
             CONTRACTS.unichainSepolia.eidolonHook
         );
 
@@ -111,8 +111,8 @@ export function SummoningPortal() {
                     nonce: result.nonce.toString(),
                     provider: address!, // Address is confirmed by isConnected common check
                     poolId: poolId,
-                    fee: 10000,
-                    tickSpacing: 200,
+                    fee: 3000,
+                    tickSpacing: 60,
                     hookAddress: CONTRACTS.unichainSepolia.eidolonHook
                 });
                 // Fix Vercel build type error (forced update)

@@ -274,7 +274,8 @@
     "hookAddress": "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8",
     "id": "e916296c-64e3-4ac6-b83c-a02f3b36c61d",
     "timestamp": 1770244231885,
-    "status": "Active"
+    "status": "Revoked",
+    "txHash": "0xfb5a9eece9912428ac427266c64a37795548011b9038d9f7b49d3707737090a0"
   },
   {
     "tokenA": "ETH",
@@ -346,6 +347,60 @@
     "hookAddress": "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8",
     "id": "f313fb2e-78fb-4227-92f3-06e43e9940b5",
     "timestamp": 1770252874272,
+    "status": "Active"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "eiETH",
+    "amountA": "0.06",
+    "amountB": "500000",
+    "expiry": 1772845500374,
+    "signature": "0xf25ab9c40b7cdd04dcb3ec72a391b1a0492a6ac5aa95def22dedffdb6f1c240c2ba4607c81097510f661fc225632b1a930814eba7a7632f79a66c45d166f35741b",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770253492696",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0x5478ecfcb56a21defe7d86bf43b17e91da84766e477e6c74bdc78a27ed98a711",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8",
+    "id": "8a458559-9731-426f-b94f-774e42a2790c",
+    "timestamp": 1770253500374,
+    "status": "Active"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "eiETH",
+    "amountA": "0.3",
+    "amountB": "12500",
+    "expiry": 1772845970832,
+    "signature": "0x761540322976b848cd8a09c9f232ef6b43833c2429a4aba7b8a6a1365048d485617df5036a3fcedbfac2412ac04c8bb7750989fd85ba6cea73d90e6bb861cb691c",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770253965385",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0x5478ecfcb56a21defe7d86bf43b17e91da84766e477e6c74bdc78a27ed98a711",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8",
+    "id": "df85255a-6458-4ad8-ac51-05087fe028d9",
+    "timestamp": 1770253970832,
+    "status": "Active"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "USDC",
+    "amountA": "0.1",
+    "amountB": "300",
+    "expiry": 1772846372552,
+    "signature": "0xd50fc1f0f1116728ad6ca5016829b93a78e7c1b12a37f01dc297d17bb8c833e05f7204100eccf9c361086b717434af377b944e7210a8b495e958e193e02282421c",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770254363095",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0xabeff78c0cfb4eb6dfbd6e2d0f0040c3c9b9b82ebae4924f98ee21fa3bfe490d",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8",
+    "id": "e19e6a60-d3e9-4b63-a1e4-fd7d2a25bbd1",
+    "timestamp": 1770254372552,
     "status": "Active"
   }
 ]

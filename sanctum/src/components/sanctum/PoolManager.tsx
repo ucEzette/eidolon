@@ -83,22 +83,15 @@ const OFFICIAL_POOL_KEYS = [
     {
         token0: "0x0000000000000000000000000000000000000000", // ETH
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 10000,
-        tickSpacing: 200,
+        fee: 3000,
+        tickSpacing: 60,
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     },
     {
         token0: "0x0000000000000000000000000000000000000000", // ETH
         token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
-        fee: 10000, // Updated to 1%
-        tickSpacing: 200,
-        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
-    },
-    {
-        token0: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
-        token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 10000,
-        tickSpacing: 200,
+        fee: 3000,
+        tickSpacing: 60,
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     }
 ];
@@ -186,22 +179,8 @@ export function PoolManager() {
         }
     });
 
-    // Auto-Select Initialized Pool
-    useEffect(() => {
-        if (!variantStates) return;
-
-        const states = variantStates as string[];
-        const initializedIndex = states.findIndex(val => hexToBigInt(val as `0x${string}`) !== 0n);
-
-        if (initializedIndex !== -1) {
-            const found = poolVariants[initializedIndex];
-            // Only update if different to avoid loops
-            if (found.fee !== poolConfig.fee || found.tickSpacing !== poolConfig.tickSpacing) {
-                console.log("PoolManager: Auto-Detected Initialized Pool!", found);
-                setPoolConfig(prev => ({ ...prev, fee: found.fee, tickSpacing: found.tickSpacing }));
-            }
-        }
-    }, [variantStates, poolVariants, poolConfig]);
+    // Auto-Select Logic Removed to allow manual override
+    // useEffect(() => { ... })
 
     // Current Active Pool ID (derived from auto-updated config)
     const poolId = useMemo(() => {
@@ -586,6 +565,20 @@ export function PoolManager() {
 
                 {/* Tabs moved to Header for better Landscape use */}
                 <div className="flex gap-2">
+                    {customPools.length > 0 && (
+                        <button
+                            className="px-3 py-2 rounded-lg font-mono text-xs text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition-all flex items-center gap-2"
+                            onClick={() => {
+                                if (confirm("Clear all custom pools?")) {
+                                    setCustomPools([]);
+                                    toast.success("Custom pools cleared");
+                                }
+                            }}
+                        >
+                            <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                            CLEAR CUSTOM
+                        </button>
+                    )}
                     <button
                         className={`px-4 py-2 rounded-lg font-display tracking-widest text-sm transition-all duration-300 border ${activeTab === 'list' ? 'bg-primary/20 border-primary text-primary' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
                         onClick={() => setActiveTab('list')}

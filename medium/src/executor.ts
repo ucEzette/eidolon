@@ -155,8 +155,8 @@ export class Executor {
             const poolKey = {
                 currency0: currency0 as `0x${string}`,
                 currency1: currency1 as `0x${string}`,
-                fee: order.fee || 10000, // Updated to 1% (10000)
-                tickSpacing: order.tickSpacing || 200, // Updated to 200
+                fee: order.fee || 3000, // Default to 0.3%
+                tickSpacing: order.tickSpacing || 60, // Default to 60
                 hooks: (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
             };
 
