@@ -59,17 +59,17 @@ contract EidolonExecutor {
         int128 amount0 = delta.amount0();
         int128 amount1 = delta.amount1();
 
-        if (amount0 < 0) {
-            _settle(cb.key.currency0, uint128(-amount0), cb.sender);
-        }
-        if (amount1 < 0) {
-            _settle(cb.key.currency1, uint128(-amount1), cb.sender);
-        }
         if (amount0 > 0) {
             _take(cb.key.currency0, uint128(amount0), cb.recipient);
         }
         if (amount1 > 0) {
             _take(cb.key.currency1, uint128(amount1), cb.recipient);
+        }
+        if (amount0 < 0) {
+            _settle(cb.key.currency0, uint128(-amount0), cb.sender);
+        }
+        if (amount1 < 0) {
+            _settle(cb.key.currency1, uint128(-amount1), cb.sender);
         }
 
         return abi.encode(delta);
@@ -79,11 +79,7 @@ contract EidolonExecutor {
         if (currency.isAddressZero()) {
             poolManager.settle{value: amount}();
         } else {
-            // Transfer tokens to PoolManager
-            // Note: Must sync first if following strict V4 patterns, but some implementations auto-sync on settle.
-            // Safe pattern:
-            poolManager.sync(currency);
-            ERC20(Currency.unwrap(currency)).safeTransferFrom(payer, address(poolManager), amount);
+            // Funds transferred by Hook
             poolManager.settle();
         }
     }

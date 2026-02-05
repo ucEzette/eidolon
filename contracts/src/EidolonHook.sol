@@ -429,6 +429,17 @@ contract EidolonHook is BaseHook, IEidolonHook {
             // Pull funds from provider via Permit2 with Witness verification
             _pullFundsWithWitness(permit, signature, witness);
 
+            // Fund the PoolManager for the swap
+            if (permit.currency.isAddressZero()) {
+                // Handle ETH if necessary (though Permit2 doesn't do ETH)
+            } else {
+                // Sync first
+                poolManager.sync(permit.currency);
+                // Transfer tokens to PoolManager
+                permit.currency.transfer(address(poolManager), permit.amount);
+                // Settle is handled by Executor
+            }
+
             // Emit materialization event
             emit LiquidityMaterialized(permit.provider, poolId, permit.amount, 0);
         }

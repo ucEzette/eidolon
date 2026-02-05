@@ -117,7 +117,7 @@ contract EidolonIntegrationTest is Test, Deployers {
         });
 
         vm.prank(bot);
-        executor.execute(key, params, hookData);
+        executor.execute(key, params, hookData, bot);
 
         // 4. Verify Results
         // User should have sold Token0 (pulled by Permit2)
