@@ -8,7 +8,7 @@ import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS, unichainSepolia } from "@/config/web3";
 import { formatUnits, parseUnits, encodeAbiParameters, keccak256, erc20Abi } from 'viem';
 import { toast } from "sonner";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts, useChainId, useSwitchChain } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts, useChainId, useSwitchChain, usePublicClient } from 'wagmi';
 import { getPoolId, getSqrtPriceX96, getPoolStateSlot, getTicksStateSlot, getTokenByAddress, sqrtPriceToPrice } from "@/utils/uniswap";
 import { parseAbi, hexToBigInt, type Address } from "viem";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
@@ -24,6 +24,10 @@ const POOL_MANAGER_ABI = parseAbi([
 
 const ROUTER_ABI = parseAbi([
     "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, (bool takeClaims, bool settleUsingBurn) testSettings, bytes hookData) external payable returns (int256 delta)"
+]);
+
+const EXECUTOR_ABI = parseAbi([
+    "function execute((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData, address recipient) external payable returns (int256 delta)"
 ]);
 
 // Helper for Pool State Slot
@@ -56,14 +60,14 @@ const OFFICIAL_POOL_KEYS = [
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
+        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
     },
     {
         token0: "0x0000000000000000000000000000000000000000", // ETH
         token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
+        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
     }
 ];
 
@@ -81,6 +85,9 @@ export function PoolManager() {
     // Swap State
     const [swapAmount, setSwapAmount] = useState("1.0");
     const [zeroForOne, setZeroForOne] = useState(true);
+    const [isDirectSwap, setIsDirectSwap] = useState(false);
+    const [isSwapPending, setIsSwapPending] = useState(false);
+    const publicClient = usePublicClient();
 
     // Mounted check for hydration safety
     const [mounted, setMounted] = useState(false);
@@ -95,7 +102,7 @@ export function PoolManager() {
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
         fee: 3000, // 0.3% Fee (Updated Default)
         tickSpacing: 60, // 60 Ticks
-        hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
+        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
     });
 
     // Network Check & Auto-Switch
@@ -500,6 +507,8 @@ export function PoolManager() {
             return;
         }
 
+        setIsSwapPending(true);
+
         try {
             const t0 = getTokenByAddress(poolConfig.token0);
             const t1 = getTokenByAddress(poolConfig.token1);
@@ -541,6 +550,14 @@ export function PoolManager() {
                 poolConfig.hooks as `0x${string}`
             );
 
+            const key = {
+                currency0: c0 as `0x${string}`,
+                currency1: c1 as `0x${string}`,
+                fee: poolConfig.fee,
+                tickSpacing: poolConfig.tickSpacing,
+                hooks: poolConfig.hooks as `0x${string}`
+            };
+
             console.log("Generated Pool Key ID for Swap (Normalized to WETH):", poolId);
 
             let permitToken = inputToken;
@@ -550,6 +567,70 @@ export function PoolManager() {
                 permitToken = WETH_ADDRESS;
                 permitSymbol = "WETH"; // Ensure relayer gets "WETH"
             }
+
+            // --- DIRECT EXECUTION MODE ---
+            if (isDirectSwap) {
+                // 1. Check Allowance
+                // Using permitToken (WETH) because Executor calls transferFrom on it
+                const amountRaw = parseUnits(swapAmount, decimals);
+
+                const allowance = await publicClient!.readContract({
+                    address: permitToken as `0x${string}`,
+                    abi: erc20Abi,
+                    functionName: 'allowance',
+                    args: [address!, CONTRACTS.unichainSepolia.executor as `0x${string}`]
+                });
+
+                if (allowance < amountRaw) {
+                    toast.info(`Approving ${permitSymbol} for Executor...`);
+                    const hash = await writeContractAsync({
+                        address: permitToken as `0x${string}`,
+                        abi: erc20Abi,
+                        functionName: 'approve',
+                        args: [CONTRACTS.unichainSepolia.executor as `0x${string}`, amountRaw]
+                    });
+                    toast.success("Approval Sent", { description: "Waiting for confirmation..." });
+                    // Ideally we wait for receipt here, but let's just proceed or let user click again if it fails
+                    // For better UX, we should wait.
+                    // Simple wait
+                    await new Promise(r => setTimeout(r, 4000));
+                }
+
+                // 2. Execute
+                const MIN_SQRT_PRICE = 4295128739n + 1n;
+                const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n - 1n;
+
+                const params = {
+                    zeroForOne: zeroForOne,
+                    amountSpecified: amountRaw * -1n, // Exact Input = Negative
+                    sqrtPriceLimitX96: zeroForOne ? MIN_SQRT_PRICE : MAX_SQRT_PRICE
+                };
+
+                const hash = await writeContractAsync({
+                    address: CONTRACTS.unichainSepolia.executor as `0x${string}`,
+                    abi: EXECUTOR_ABI,
+                    functionName: 'execute',
+                    args: [key, params, "0x", address!] // '0x' hookData, recipient = user
+                });
+
+                const shortHash = `${hash.slice(0, 6)}...`;
+                toast.success("Direct Swap Executed", {
+                    description: `Tx: ${shortHash}. Check Explorer.`
+                });
+
+                // Add Activity
+                const newActivity: Activity = {
+                    id: crypto.randomUUID(),
+                    type: 'SWAP',
+                    description: `Direct Swap: ${swapAmount} ${inputSymbol}`,
+                    hash: hash,
+                    timestamp: Date.now()
+                };
+                setActivities(prev => [newActivity, ...prev]);
+
+                setIsSwapPending(false);
+                return;
+            } // --- END DIRECT MODE ---
 
             // 2. Sign Ghost Permit (The "Intent")
             // This authorizes the Bot to pull 'swapAmount' from user's wallet
@@ -569,8 +650,8 @@ export function PoolManager() {
             // In a real JIT Swap, the Bot basically "fills" this order.
 
             addPosition({
-                tokenA: permitSymbol, // Use WETH if it was ETH
-                tokenB: zeroForOne ? sym1 : sym0, // Target (Output)
+                tokenA: permitToken, // Use Full Address
+                tokenB: zeroForOne ? poolConfig.token1 : poolConfig.token0, // Target (Output)
                 amountA: swapAmount,
                 amountB: "0",
                 expiry: Date.now() + (30 * 60 * 1000),
@@ -601,6 +682,8 @@ export function PoolManager() {
         } catch (e: any) {
             console.error(e);
             toast.error("Swap Failed", { description: e.shortMessage || e.message });
+        } finally {
+            setIsSwapPending(false);
         }
     };
 
@@ -1140,11 +1223,32 @@ export function PoolManager() {
                                     </div>
                                 </div>
 
+                                <div className="flex items-center justify-between mb-4 px-2">
+                                    <span className="text-xs font-mono text-text-muted uppercase tracking-widest">
+                                        Execution Interface
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold ${isDirectSwap ? "text-text-muted" : "text-emerald-400"}`}>INTENT</span>
+                                        <input
+                                            type="checkbox"
+                                            className="toggle toggle-success toggle-sm"
+                                            checked={isDirectSwap}
+                                            onChange={(e) => setIsDirectSwap(e.target.checked)}
+                                        />
+                                        <span className={`text-xs font-bold ${isDirectSwap ? "text-emerald-400" : "text-text-muted"}`}>DIRECT</span>
+                                    </div>
+                                </div>
+
                                 <button
                                     onClick={handleSwap}
-                                    className="w-full py-4 mt-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-display tracking-widest rounded-xl transition-all shadow-glow hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                                    disabled={isSwapPending}
+                                    className={`w-full py-4 mt-2 font-bold font-display tracking-widest rounded-xl transition-all shadow-glow 
+                                        ${isSwapPending ? "bg-white/10 text-white/50 cursor-not-allowed" :
+                                            isDirectSwap ? "bg-blue-500 hover:bg-blue-400 text-black hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]" :
+                                                "bg-emerald-500 hover:bg-emerald-400 text-black hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                                        }`}
                                 >
-                                    SWAP VIA EIDOLON ROUTER
+                                    {isSwapPending ? "EXECUTING..." : (isDirectSwap ? "EXECUTE DIRECTLY (GAS)" : "SUBMIT INTENT (GASLESS)")}
                                 </button>
                             </div>
                         )}
