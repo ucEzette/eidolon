@@ -86,9 +86,14 @@ export function SummoningPortal() {
 
         console.log("Generated Pool Key ID:", poolId);
 
+        const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        let permitToken = signingTokenA;
+        if (permitToken === ZERO_ADDRESS) permitToken = WETH_ADDRESS;
+
         try {
             const result = await signPermit(
-                signingTokenA,
+                permitToken as `0x${string}`,
                 amount,
                 poolId,
                 liquidityMode === 'dual-sided',
@@ -105,7 +110,7 @@ export function SummoningPortal() {
                     tokenB: tokenB.symbol,
                     amountA: amount,
                     amountB: liquidityMode === 'dual-sided' ? amountB : "0",
-                    expiry: Date.now() + (minutes * 60 * 1000),
+                    expiry: Number(result.deadline) * 1000, // Use EXACT deadline
                     signature: result.signature,
                     liquidityMode: liquidityMode,
                     nonce: result.nonce.toString(),
