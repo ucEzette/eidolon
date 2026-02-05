@@ -1,7 +1,7 @@
 const Redis = require("ioredis");
 
 // Use env var or default
-const redisUrl = process.env.REDIS_URL || 'rediss://default:AbGDAAIncDIzOTk4ZDI0ODgzYWE0YTRiODM0NWEyYTE4YjRhZjQ1N3AyNDU0NDM@maximum-ocelot-45443.upstash.io:6379';
+const redisUrl = process.env.REDIS_URL;
 const redis = new Redis(redisUrl);
 const REDIS_KEY = 'eidolon:orders';
 

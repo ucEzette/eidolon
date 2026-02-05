@@ -25,18 +25,21 @@ contract EidolonExecutor {
         SwapParams params;
         bytes hookData;
         address sender;
+        address recipient;
     }
 
     function execute(
         PoolKey calldata key,
         SwapParams calldata params,
-        bytes calldata hookData
+        bytes calldata hookData,
+        address recipient
     ) external payable returns (BalanceDelta delta) {
         bytes memory data = abi.encode(CallbackData({
             key: key,
             params: params,
             hookData: hookData,
-            sender: msg.sender
+            sender: msg.sender,
+            recipient: recipient
         }));
 
         bytes memory result = poolManager.unlock(data);
@@ -63,10 +66,10 @@ contract EidolonExecutor {
             _settle(cb.key.currency1, uint128(-amount1), cb.sender);
         }
         if (amount0 > 0) {
-            _take(cb.key.currency0, uint128(amount0), cb.sender);
+            _take(cb.key.currency0, uint128(amount0), cb.recipient);
         }
         if (amount1 > 0) {
-            _take(cb.key.currency1, uint128(amount1), cb.sender);
+            _take(cb.key.currency1, uint128(amount1), cb.recipient);
         }
 
         return abi.encode(delta);

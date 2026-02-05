@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.26;
+pragma solidity ^0.8.20;
 
-import {Script, console2} from "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {EidolonExecutor} from "../src/EidolonExecutor.sol";
 
@@ -10,16 +10,10 @@ contract DeployExecutor is Script {
 
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerPrivateKey);
-
-        console2.log("Deploying Executor from:", deployer);
-
         vm.startBroadcast(deployerPrivateKey);
 
         EidolonExecutor executor = new EidolonExecutor(IPoolManager(POOL_MANAGER));
-
-        console2.log("EidolonExecutor deployed at:", address(executor));
-
+        
         vm.stopBroadcast();
     }
 }

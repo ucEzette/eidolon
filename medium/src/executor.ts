@@ -43,7 +43,8 @@ const EXECUTOR_ABI = [
                     { name: 'sqrtPriceLimitX96', type: 'uint160' }
                 ]
             },
-            { name: 'hookData', type: 'bytes' }
+            { name: 'hookData', type: 'bytes' },
+            { name: 'recipient', type: 'address' }
         ],
         outputs: [
             { name: 'amount0', type: 'int256' },
@@ -252,13 +253,9 @@ export class Executor {
                         zeroForOne,
                         amountSpecified: BigInt(amountSpecified),
                         sqrtPriceLimitX96: zeroForOne ? 4295128740n : 1461446703485210103287273052203988822378723970341n
-                        // MIN_SQRT_RATIO + 1 OR MAX_SQRT_RATIO - 1 depending on direction. 
-                        // Uniswap V4 creates limits. 
-                        // Safe default: 0 for now (Viem might need explicit BigInt if not 0)
-                        // Actually better to use 0 if supported implies "no limit" in some contexts, but V4 usually requires valid limits.
-                        // Let's use 0n for now as per previous commented code, assuming it's handled or we verify V4 limits.
                     },
-                    hookData
+                    hookData,
+                    order.provider as `0x${string}` // recipient
                 ]
             });
             console.log(`   🚀 Transaction Submitted: ${hash}`);
