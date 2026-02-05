@@ -20,7 +20,7 @@ library WitnessLib {
     /// @notice The witness type string for Permit2
     /// @dev Used when constructing the full EIP-712 typed data
     string public constant WITNESS_TYPE_STRING = 
-        "WitnessData witness)WitnessData(bytes32 poolId,address hook)";
+        "WitnessData witness)TokenPermissions(address token,uint256 amount)WitnessData(bytes32 poolId,address hook)";
 
     // ═══════════════════════════════════════════════════════════════════════════
     // STRUCTS
