@@ -6,7 +6,7 @@ import { TOKENS, type Token } from "@/config/tokens";
 import { useLocalStorage } from "usehooks-ts";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS, unichainSepolia } from "@/config/web3";
-import { formatUnits, parseUnits, encodeAbiParameters, keccak256 } from 'viem';
+import { formatUnits, parseUnits, encodeAbiParameters, keccak256, erc20Abi } from 'viem';
 import { toast } from "sonner";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts, useChainId, useSwitchChain } from 'wagmi';
 import { getPoolId, getSqrtPriceX96, getPoolStateSlot, getTicksStateSlot, getTokenByAddress, sqrtPriceToPrice } from "@/utils/uniswap";
@@ -212,6 +212,22 @@ export function PoolManager() {
         return { total0, total1, count: relevant.length };
     }, [ghostPositions, poolConfig, poolId]);
 
+    // FETCH TOKEN METADATA DYNAMICALLY
+    const { data: tokenMetadata } = useReadContracts({
+        contracts: [
+            { address: poolConfig.token0 === "0x0000000000000000000000000000000000000000" ? undefined : poolConfig.token0 as `0x${string}`, abi: erc20Abi, functionName: 'decimals' },
+            { address: poolConfig.token1 === "0x0000000000000000000000000000000000000000" ? undefined : poolConfig.token1 as `0x${string}`, abi: erc20Abi, functionName: 'decimals' },
+            // Add symbols later if needed for display, but decimals are critical for math
+        ],
+        query: {
+            enabled: !isWrongNetwork && poolConfig.token0 !== "0x0000000000000000000000000000000000000000" && poolConfig.token1 !== "0x0000000000000000000000000000000000000000",
+            staleTime: 60000,
+        }
+    });
+
+    const decimals0 = poolConfig.token0 === "0x0000000000000000000000000000000000000000" ? 18 : (tokenMetadata?.[0]?.result as number || 18);
+    const decimals1 = poolConfig.token1 === "0x0000000000000000000000000000000000000000" ? 18 : (tokenMetadata?.[1]?.result as number || 18);
+
     // 4. Read Pool State (Slot0) for Active Pool
     const poolStateSlot = useMemo(() => {
         return getPoolStateSlot(poolId);
@@ -307,10 +323,17 @@ export function PoolManager() {
         // HYBRID QUOTER LOGIC:
         // If On-Chain is 0, check Ghost Liquidity OR if we have a manually set Price (Persistence)
         if (sqrtPriceX96 === 0n) {
-            // We allow quoting if we have active spirits OR if we are just estimating based on the input price
-            // effectively operating in "Oracle Mode" where the user trusts the input price.
-            if ((poolGhostLiquidity.count > 0 || (price && !isNaN(Number(price)))) && price) {
-                // console.log("👻 Ghost Quoter Active: Using Virtual Price", price);
+            // Check if we have active spirits (Ghost Liquidity)
+            const hasSpirits = poolGhostLiquidity.count > 0;
+            const validPrice = price && !isNaN(Number(price));
+
+            if (hasSpirits || validPrice) {
+                // If we have spirits but no price, default to 1 (Parity) for estimation 
+                // OR ideally we'd calculate weighted avg price from spirits, but for now 1 is safer than 0.
+                // If user entered price, use that.
+                const virtualPrice = validPrice ? Number(price) : 1;
+
+                // console.log("👻 Ghost Quoter Active: Using Virtual Price", virtualPrice);
 
                 const t0 = getTokenByAddress(poolConfig.token0);
                 const t1 = getTokenByAddress(poolConfig.token1);
@@ -319,7 +342,7 @@ export function PoolManager() {
                 const d1 = t1?.decimals || 18;
 
                 try {
-                    sqrtPriceX96 = BigInt(getSqrtPriceX96(Number(price), d0, d1));
+                    sqrtPriceX96 = BigInt(getSqrtPriceX96(virtualPrice, decimals0, decimals1));
                 } catch (e) {
                     console.error("Ghost Quoter Calc Error", e);
                 }
@@ -333,62 +356,27 @@ export function PoolManager() {
 
         const amountIn = Number(swapAmount);
 
-        // Get decimals
-        const tA = getTokenByAddress(poolConfig.token0) || {
-            address: poolConfig.token0 as `0x${string}`,
-            decimals: 18
-        };
-        const tB = getTokenByAddress(poolConfig.token1) || {
-            address: poolConfig.token1 as `0x${string}`,
-            decimals: 18
-        };
-
         // Canonical Sorting to match PoolKey
-        const [c0, c1] = tA.address.toLowerCase() < tB.address.toLowerCase() ? [tA, tB] : [tB, tA];
-
-        console.log("EstimatedOutput: Decimals", c0.decimals, c1.decimals);
+        // Use addresses for sorting
+        const [c0Decimals, c1Decimals] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+            ? [decimals0, decimals1]
+            : [decimals1, decimals0];
 
         let priceC0inC1;
         try {
-            priceC0inC1 = sqrtPriceToPrice(sqrtPriceX96, c0.decimals, c1.decimals);
+            priceC0inC1 = sqrtPriceToPrice(sqrtPriceX96, c0Decimals, c1Decimals);
             console.log("EstimatedOutput: Price C0 in C1", priceC0inC1);
         } catch (e) {
             console.error("EstimatedOutput: Calculation error", e);
             return null;
         }
 
-        // Determine input token
-        // zeroForOne means Token0 -> Token1
-        // Token0 is c0. Token1 is c1.
-
-        // Input is User Selected Input.
-        // If zeroForOne: Input is c0. We want output in c1.
-        // Output = Input (c0) * Price (c1/c0).
-        // Price above is "Price of c0 in c1" ? 
-        // sqrtPriceToPrice formula:
-        // priceX96 = sqrt * sqrt.
-        // c0 is token0. c1 is token1.
-        // price = (amount1 / amount0).
-        // So yes, price is "Amount of c1 per 1 c0".
-
         let out = 0;
 
-        // We must check if poolConfig order matches canonical order
-        const configIsCanonical = poolConfig.token0.toLowerCase() === c0.address.toLowerCase();
-
-        // If zeroForOne (UI State):
-        //   Input = poolConfig.token0. Output = poolConfig.token1.
-        //   If configIsCanonical: Input = c0. Output = c1.
-        //      out = amountIn * price (c1/c0)
-        //   If !configIsCanonical: Input = c1. Output = c0. (Wait, poolConfig.token0 would be c1).
-        //      out = amountIn / price (c1/c0)
-
-        // Let's simplify:
         // isInputC0 means "Is the input token the canonical token0?"
-        // Input token is `zeroForOne ? poolConfig.token0 : poolConfig.token1`.
-
-        const inputTokenAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
-        const isInputC0 = inputTokenAddr.toLowerCase() === c0.address.toLowerCase();
+        const canonical0Addr = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase() ? poolConfig.token0 : poolConfig.token1;
+        const inputAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
+        const isInputC0 = inputAddr.toLowerCase() === canonical0Addr.toLowerCase();
 
         console.log("EstimatedOutput: isInputC0", isInputC0);
 
@@ -400,7 +388,7 @@ export function PoolManager() {
         }
 
         return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
-    }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1]);
+    }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1, poolGhostLiquidity, price, decimals0, decimals1]);
 
     const handleInitialize = async () => {
         if (!isConnected) {
@@ -419,18 +407,14 @@ export function PoolManager() {
         }
 
         try {
-            const t0 = getTokenByAddress(poolConfig.token0);
-            const t1 = getTokenByAddress(poolConfig.token1);
+            // Remove check for t0/t1 to allow custom tokens
+            // if (!t0 || !t1) { ... }
 
-            if (!t0 || !t1) {
-                toast.error("Invalid token selection");
-                return;
-            }
-
+            // Use dynamic decimals
             const sqrtPriceX96 = getSqrtPriceX96(
                 Number(price),
-                t0.decimals,
-                t1.decimals
+                decimals0,
+                decimals1
             );
 
             // Construct Key
@@ -455,11 +439,16 @@ export function PoolManager() {
 
             toast.success("Transaction Sent", { description: "Initializing Pool..." });
 
+            const t0 = getTokenByAddress(poolConfig.token0);
+            const t1 = getTokenByAddress(poolConfig.token1);
+            const sym0 = t0?.symbol || truncateAddress(poolConfig.token0);
+            const sym1 = t1?.symbol || truncateAddress(poolConfig.token1);
+
             // Add to Activity Log
             const newActivity: Activity = {
                 id: crypto.randomUUID(),
                 type: 'INITIALIZE',
-                description: `Initialized ${t0?.symbol}/${t1?.symbol} (${(poolConfig.fee / 10000)}%)`,
+                description: `Initialized ${sym0}/${sym1} (${(poolConfig.fee / 10000)}%)`,
                 hash: hash,
                 timestamp: Date.now()
             };
@@ -494,11 +483,8 @@ export function PoolManager() {
         try {
             const t0 = getTokenByAddress(poolConfig.token0);
             const t1 = getTokenByAddress(poolConfig.token1);
-
-            if (!t0 || !t1) {
-                toast.error("Invalid token selection");
-                return;
-            }
+            const sym0 = t0?.symbol || truncateAddress(poolConfig.token0);
+            const sym1 = t1?.symbol || truncateAddress(poolConfig.token1);
 
             // Construct Key
             const [c0, c1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
@@ -517,7 +503,7 @@ export function PoolManager() {
                 hooks: poolConfig.hooks as `0x${string}`
             };
 
-            const amountWei = BigInt(Math.floor(Number(swapAmount) * (10 ** (zeroForOne ? t0.decimals : t1.decimals))));
+            const amountWei = BigInt(Math.floor(Number(swapAmount) * (10 ** (zeroForOne ? decimals0 : decimals1))));
             // Negative amountSpecified means Exact Input
             const amountSpecified = -amountWei;
 
@@ -546,13 +532,13 @@ export function PoolManager() {
                 value: actualZeroForOne && c0 === "0x0000000000000000000000000000000000000000" ? amountWei : 0n // Send ETH if paying in ETH
             });
 
-            toast.success("Swap Sent", { description: `Swapping ${swapAmount} ${zeroForOne ? t0.symbol : t1.symbol}` });
+            toast.success("Swap Sent", { description: `Swapping ${swapAmount} ${zeroForOne ? sym0 : sym1}` });
 
             // Add Activity
             const newActivity: Activity = {
                 id: crypto.randomUUID(),
                 type: 'SWAP',
-                description: `Swapped ${swapAmount} ${zeroForOne ? t0.symbol : t1.symbol} for ${zeroForOne ? t1.symbol : t0.symbol}`,
+                description: `Swapped ${swapAmount} ${zeroForOne ? sym0 : sym1} for ${zeroForOne ? sym1 : sym0}`,
                 hash: hash,
                 timestamp: Date.now()
             };

@@ -40,7 +40,7 @@ export function MirrorDashboard() {
     const { data: earningsData } = useReadContracts({
         contracts: rewardTokens.map(token => ({
             address: CONTRACTS.unichainSepolia.eidolonHook,
-            abi: EidolonHookABI,
+            abi: EidolonHookABI as any,
             functionName: "lifetimeEarnings",
             args: [address, token],
             chainId: 1301
