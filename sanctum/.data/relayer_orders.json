@@ -402,5 +402,23 @@
     "id": "e19e6a60-d3e9-4b63-a1e4-fd7d2a25bbd1",
     "timestamp": 1770254372552,
     "status": "Active"
+  },
+  {
+    "tokenA": "ETH",
+    "tokenB": "USDC",
+    "amountA": "0.1",
+    "amountB": "12",
+    "expiry": 1772847246399,
+    "signature": "0x260d0ef61f9be91047634b49244369a18b42117d1ccb489456cde39936ae582d1e10734038348f9db202141307c908f294ba3475c6147c8b9466f2c7b7dcd5131b",
+    "liquidityMode": "dual-sided",
+    "nonce": "1770255239649",
+    "provider": "0x4c9De23f22992a51d6790C877870D7334b053d4B",
+    "poolId": "0xabeff78c0cfb4eb6dfbd6e2d0f0040c3c9b9b82ebae4924f98ee21fa3bfe490d",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "hookAddress": "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8",
+    "id": "c538b25a-d6c0-4d16-99c3-ab42af6dc534",
+    "timestamp": 1770255246400,
+    "status": "Active"
   }
 ]

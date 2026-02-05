@@ -1,45 +1,23 @@
-
-import fs from 'fs';
-import path from 'path';
+import { Redis } from 'ioredis';
 import { type GhostPosition } from '@/hooks/useGhostPositions';
 
-// Database file path - using /tmp for demo purposes or a persistent path if possible
-// In a real Vercel deployment, this would need to be KV or Postgres.
-// For this local/demo environment, we'll store it in the project root's .data folder
-const DATA_DIR = path.join(process.cwd(), '.data');
-const DB_PATH = path.join(DATA_DIR, 'relayer_orders.json');
-
-// Ensure DB exists
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify([]));
-}
+// Use env var or default local
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const REDIS_KEY = 'eidolon:orders';
 
 export const RelayerDB = {
-    getAllOrders: (): GhostPosition[] => {
+    getAllOrders: async (): Promise<GhostPosition[]> => {
         try {
-            const data = fs.readFileSync(DB_PATH, 'utf-8');
-            return JSON.parse(data);
+            const data = await redis.get(REDIS_KEY);
+            return data ? JSON.parse(data) : [];
         } catch (e) {
-            console.error("RelayerDB Read Error (DB_PATH: " + DB_PATH + "):", e);
+            console.error("RelayerDB Redis Read Error:", e);
             return [];
         }
     },
 
-    getOrdersByUser: (_userAddress: string): GhostPosition[] => {
-        // Simple filter, assuming we store user address in the permit or can infer it.
-        // The GhostPosition struct doesn't explicitly have "maker" at top level, 
-        // but it's part of the signature. For now, we'll return all and let client filter 
-        // OR update GhostPosition to include 'maker'.
-        // Let's assume we will update GhostPosition to include 'makerAddress' for easier indexing.
-        const orders = RelayerDB.getAllOrders();
-        return orders; // Filtering logic to be refined based on updated Interface
-    },
-
-    saveOrder: (order: GhostPosition) => {
-        const orders = RelayerDB.getAllOrders();
+    saveOrder: async (order: GhostPosition) => {
+        const orders = await RelayerDB.getAllOrders();
 
         // Check if already exists
         const exists = orders.find(o => o.id === order.id);
@@ -53,25 +31,25 @@ export const RelayerDB = {
         }
 
         try {
-            fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2));
-            console.log("RelayerDB Saved Order:", order.id);
+            await redis.set(REDIS_KEY, JSON.stringify(orders));
+            console.log("RelayerDB Saved Order to Redis:", order.id);
         } catch (e) {
-            console.error("RelayerDB Write Error:", e);
+            console.error("RelayerDB Redis Write Error:", e);
             throw e;
         }
         return order;
     },
 
     // Revoke/Delete
-    deleteOrder: (id: string, txHash?: string) => {
-        const orders = RelayerDB.getAllOrders();
+    deleteOrder: async (id: string, txHash?: string) => {
+        const orders = await RelayerDB.getAllOrders();
         const orderIndex = orders.findIndex(o => o.id === id);
 
         if (orderIndex !== -1) {
             // We don't actually delete, we mark as Revoked for history
             orders[orderIndex].status = 'Revoked';
             if (txHash) orders[orderIndex].txHash = txHash;
-            fs.writeFileSync(DB_PATH, JSON.stringify(orders, null, 2));
+            await redis.set(REDIS_KEY, JSON.stringify(orders));
         }
     }
 };

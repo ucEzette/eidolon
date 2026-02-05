@@ -15,6 +15,17 @@ async function main() {
         process.exit(0);
     });
 
+    // Health Check Server for Railway
+    const http = require('http');
+    const port = process.env.PORT || 8080;
+    const server = http.createServer((req: any, res: any) => {
+        res.writeHead(200);
+        res.end('Health Check: OK');
+    });
+    server.listen(port, () => {
+        console.log(`🏥 Health Check Server running on port ${port}`);
+    });
+
     await monitor.start();
 }
 

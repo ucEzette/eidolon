@@ -4,14 +4,15 @@ import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import { TOKENS, type Token } from "@/config/tokens";
 import { useLocalStorage } from "usehooks-ts";
-import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS, unichainSepolia } from "@/config/web3";
 import { formatUnits, parseUnits, encodeAbiParameters, keccak256 } from 'viem';
 import { toast } from "sonner";
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts, useChainId, useSwitchChain } from 'wagmi';
-import { getPoolId, getSqrtPriceX96 } from "@/utils/uniswap";
+import { getPoolId, getSqrtPriceX96, getPoolStateSlot, getTicksStateSlot, getTokenByAddress, sqrtPriceToPrice } from "@/utils/uniswap";
 import { parseAbi, hexToBigInt, type Address } from "viem";
+import { useGhostPositions } from "@/hooks/useGhostPositions";
+import Link from "next/link";
 
 const POOL_MANAGER_ABI = parseAbi([
     "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
@@ -26,43 +27,12 @@ const ROUTER_ABI = parseAbi([
 
 // Helper for Pool State Slot
 const POOLS_MAPPING_SLOT = 6n;
-const getPoolStateSlot = (poolId: `0x${string}` | undefined) => {
-    if (!poolId) return undefined;
-    return keccak256(encodeAbiParameters(
-        [{ name: 'key', type: 'bytes32' }, { name: 'slot', type: 'uint256' }],
-        [poolId, POOLS_MAPPING_SLOT]
-    ));
-}
 
-function getTokenByAddress(address: string): Token | undefined {
-    return TOKENS.find(t => t.address.toLowerCase() === address.toLowerCase());
-}
 
 function truncateAddress(address: string) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function sqrtPriceToPrice(sqrtPriceX96: bigint, decimals0: number, decimals1: number): string {
-    const priceX96 = sqrtPriceX96 * sqrtPriceX96;
-    const shift = 1n << 192n;
-    const decimalDiff = BigInt(decimals0 - decimals1);
-
-    // We want: result = (priceX96 * 10^decimalDiff) / 2^192
-
-    let num = priceX96;
-    let den = shift;
-
-    if (decimalDiff > 0n) {
-        num = num * (10n ** decimalDiff);
-    } else {
-        den = den * (10n ** (-decimalDiff));
-    }
-
-    const floatPrecision = 1000000n; // 6 decimals precision
-    const resultBigInt = (num * floatPrecision) / den;
-
-    return (Number(resultBigInt) / Number(floatPrecision)).toFixed(6);
-}
 
 const FEERATE_TO_TICKSPACING: Record<number, number> = {
     500: 10,
@@ -122,8 +92,8 @@ export function PoolManager() {
     const [poolConfig, setPoolConfig] = useState({
         token0: "0x0000000000000000000000000000000000000000", // ETH (Native)
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 10000, // 1% Fee
-        tickSpacing: 200, // 200 Ticks
+        fee: 3000, // 0.3% Fee (Updated Default)
+        tickSpacing: 60, // 60 Ticks
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     });
 
@@ -192,6 +162,55 @@ export function PoolManager() {
             poolConfig.hooks as `0x${string}`
         );
     }, [poolConfig]);
+
+    // Ghost Liquidity (Off-Chain Intents)
+    const { positions: ghostPositions } = useGhostPositions();
+
+    const poolGhostLiquidity = useMemo(() => {
+        // console.log("DEBUG: Calculating Ghost Liquidity for Pool:", poolId);
+        // console.log("DEBUG: All Ghost Positions:", ghostPositions);
+
+        if (!poolConfig.token0 || !poolConfig.token1) return { total0: 0, total1: 0, count: 0 };
+
+        const relevant = ghostPositions.filter(p => {
+            const match = p.status === 'Active' && p.poolId === poolId;
+            // if (!match) console.log("DEBUG: Validation Failed for", p.id, p.status, p.poolId, poolId);
+            return match;
+        });
+
+        // console.log("DEBUG: Relevant Positions Found:", relevant.length);
+
+        let total0 = 0;
+        let total1 = 0;
+
+        relevant.forEach(p => {
+            // We need to map p.tokenA/B to poolConfig.token0/1 (Case Insensitive)
+            const pTokenA = p.tokenA === "ETH" ? "0x0000000000000000000000000000000000000000" :
+                (p.tokenA === "USDC" ? "0x31d0220469e10c4E71834a79b1f276d740d3768F" :
+                    (p.tokenA === "eiETH" ? "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" : p.tokenA));
+
+            const pTokenB = p.tokenB === "ETH" ? "0x0000000000000000000000000000000000000000" :
+                (p.tokenB === "USDC" ? "0x31d0220469e10c4E71834a79b1f276d740d3768F" :
+                    (p.tokenB === "eiETH" ? "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" : p.tokenB));
+
+            if (pTokenA.toLowerCase() === poolConfig.token0.toLowerCase()) {
+                total0 += Number(p.amountA);
+            } else if (pTokenA.toLowerCase() === poolConfig.token1.toLowerCase()) {
+                total1 += Number(p.amountA);
+            }
+
+            if (p.liquidityMode === 'dual-sided') {
+                if (pTokenB.toLowerCase() === poolConfig.token0.toLowerCase()) {
+                    total0 += Number(p.amountB);
+                } else if (pTokenB.toLowerCase() === poolConfig.token1.toLowerCase()) {
+                    total1 += Number(p.amountB);
+                }
+            }
+        });
+
+        console.log("DEBUG: Pool Ghost Liquidity Result:", { total0, total1, count: relevant.length });
+        return { total0, total1, count: relevant.length };
+    }, [ghostPositions, poolConfig, poolId]);
 
     // 4. Read Pool State (Slot0) for Active Pool
     const poolStateSlot = useMemo(() => {
@@ -279,28 +298,36 @@ export function PoolManager() {
             return null;
         }
 
-        const val = hexToBigInt(poolStateData as `0x${string}`);
-        console.log("EstimatedOutput: Raw poolStateData val", val);
-
-        if (val === 0n) {
-            console.log("EstimatedOutput: Pool not initialized (val is 0)");
-            return null;
-        }
+        const val = BigInt(!poolStateData ? 0 : poolStateData as string);
+        // console.log("EstimatedOutput: Raw poolStateData val", val);
 
         // sqrtPriceX96 is in lower 160 bits (Slot0)
-        // Standard V4 Pool.State includes Slot0 at offset 0.
-        // However, we are reading the merged slot.
-        // extsload returns 32 bytes.
-        // Slot0 struct: sqrtPriceX96 (160), tick (24), protocolFee (24), lpFee (24) = 232 bits.
-        // 232 bits fits in 256 bits (32 bytes).
-        // So the returned val contains the packed Slot0.
+        let sqrtPriceX96 = val & ((1n << 160n) - 1n);
 
-        // Extract sqrtPriceX96 (low 160 bits)
-        const sqrtPriceX96 = val & ((1n << 160n) - 1n);
-        console.log("EstimatedOutput: sqrtPriceX96", sqrtPriceX96);
+        // HYBRID QUOTER LOGIC:
+        // If On-Chain is 0, check Ghost Liquidity OR if we have a manually set Price (Persistence)
+        if (sqrtPriceX96 === 0n) {
+            // We allow quoting if we have active spirits OR if we are just estimating based on the input price
+            // effectively operating in "Oracle Mode" where the user trusts the input price.
+            if ((poolGhostLiquidity.count > 0 || (price && !isNaN(Number(price)))) && price) {
+                // console.log("👻 Ghost Quoter Active: Using Virtual Price", price);
+
+                const t0 = getTokenByAddress(poolConfig.token0);
+                const t1 = getTokenByAddress(poolConfig.token1);
+
+                const d0 = t0?.decimals || 18;
+                const d1 = t1?.decimals || 18;
+
+                try {
+                    sqrtPriceX96 = BigInt(getSqrtPriceX96(Number(price), d0, d1));
+                } catch (e) {
+                    console.error("Ghost Quoter Calc Error", e);
+                }
+            }
+        }
 
         if (sqrtPriceX96 === 0n) {
-            console.log("EstimatedOutput: sqrtPriceX96 is 0");
+            console.log("EstimatedOutput: sqrtPriceX96 is 0 and no Ghost Liquidity found.");
             return null;
         }
 
@@ -565,7 +592,7 @@ export function PoolManager() {
 
                 {/* Tabs moved to Header for better Landscape use */}
                 <div className="flex gap-2">
-                    {customPools.length > 0 && (
+                    {mounted && customPools.length > 0 && (
                         <button
                             className="px-3 py-2 rounded-lg font-mono text-xs text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 transition-all flex items-center gap-2"
                             onClick={() => {
@@ -769,6 +796,46 @@ export function PoolManager() {
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* Left Column: Configuration */}
                                 <div className="border border-border-dark p-6 rounded-2xl bg-black/20">
+
+                                    {/* Ghost Liquidity Indicator */}
+                                    <div className="mb-6 p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                                                <span className="text-xl">👻</span>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-purple-300 font-display text-sm tracking-wider">INVISIBLE LIQUIDITY</h4>
+                                                <p className="text-xs text-purple-400/60 font-mono">
+                                                    {poolGhostLiquidity.count} Active Spirits Waiting
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-white font-mono font-bold text-sm">
+                                                {poolGhostLiquidity.total0 > 0 && <span>{poolGhostLiquidity.total0.toFixed(4)} {token0?.symbol}</span>}
+                                                {poolGhostLiquidity.total0 > 0 && poolGhostLiquidity.total1 > 0 && <span className="mx-2">+</span>}
+                                                {poolGhostLiquidity.total1 > 0 && <span>{poolGhostLiquidity.total1.toFixed(4)} {token1?.symbol}</span>}
+                                                {poolGhostLiquidity.total0 === 0 && poolGhostLiquidity.total1 === 0 && (
+                                                    <span className="opacity-50 italic text-xs">
+                                                        {price ? `(Last: ${price})` : "0.0000"}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-[10px] text-purple-400/50 uppercase tracking-widest">
+                                                {poolGhostLiquidity.count === 0 && price ? "Liquidity Consumed" : "Available Virtual Depth"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Re-Summon Prompt */}
+                                    {poolGhostLiquidity.count === 0 && (
+                                        <div className="mb-6 -mt-4 text-center animate-pulse">
+                                            <Link href="/summon" className="text-xs text-secondary hover:text-secondary-highlight underline font-mono">
+                                                Need more spirits? Summon here →
+                                            </Link>
+                                        </div>
+                                    )}
+
                                     <label className="text-sm font-display text-text-muted tracking-[0.2em] uppercase mb-6 block">Pool Configuration</label>
                                     <div className="flex flex-col gap-6">
 

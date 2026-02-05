@@ -10,7 +10,7 @@ const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 // GET /api/relayer/orders
 export async function GET(request: NextRequest) {
     try {
-        const orders = RelayerDB.getAllOrders();
+        const orders = await RelayerDB.getAllOrders();
         return NextResponse.json({ success: true, orders });
     } catch (error) {
         return NextResponse.json({ success: false, error: 'Failed to fetch orders' }, { status: 500 });
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Invalid order data' }, { status: 400 });
         }
 
-        RelayerDB.saveOrder(order);
+        await RelayerDB.saveOrder(order);
 
         // [NEW] Publish Real-Time Event
         try {
