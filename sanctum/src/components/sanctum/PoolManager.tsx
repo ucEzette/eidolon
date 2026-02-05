@@ -7,26 +7,30 @@ import { useLocalStorage } from "usehooks-ts";
 import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
 import { CONTRACTS, unichainSepolia } from "@/config/web3";
+import { formatUnits, parseUnits, encodeAbiParameters, keccak256 } from 'viem';
 import { toast } from "sonner";
-import { useAccount, useWriteContract, useReadContract, useReadContracts, useChainId, useSwitchChain } from "wagmi";
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts, useChainId, useSwitchChain } from 'wagmi';
 import { getPoolId, getSqrtPriceX96 } from "@/utils/uniswap";
-import { parseAbi, encodeAbiParameters, keccak256, hexToBigInt, type Address } from "viem";
+import { parseAbi, hexToBigInt, type Address } from "viem";
 
 const POOL_MANAGER_ABI = parseAbi([
     "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
-    "function extsload(bytes32 slot) external view returns (bytes32 value)"
+    "function extsload(bytes32 slot) external view returns (bytes32 value)",
+    "function extsload(bytes32[] slots) external view returns (bytes32[] values)",
+    "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes testSettings) external payable returns (int256 delta)"
 ]);
 
 const ROUTER_ABI = parseAbi([
     "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, (bool takeClaims, bool settleUsingBurn) testSettings, bytes hookData) external payable returns (int256 delta)"
 ]);
 
-// Helper to calculate storage slot for _pools[poolId] (Slot 6)
-const POOL_STORAGE_SLOT = 6n;
-function getPoolStateSlot(poolId: Address) {
+// Helper for Pool State Slot
+const POOLS_MAPPING_SLOT = 6n;
+const getPoolStateSlot = (poolId: `0x${string}` | undefined) => {
+    if (!poolId) return undefined;
     return keccak256(encodeAbiParameters(
-        [{ type: 'bytes32' }, { type: 'uint256' }],
-        [poolId, POOL_STORAGE_SLOT]
+        [{ name: 'key', type: 'bytes32' }, { name: 'slot', type: 'uint256' }],
+        [poolId, POOLS_MAPPING_SLOT]
     ));
 }
 
@@ -41,20 +45,23 @@ function truncateAddress(address: string) {
 function sqrtPriceToPrice(sqrtPriceX96: bigint, decimals0: number, decimals1: number): string {
     const priceX96 = sqrtPriceX96 * sqrtPriceX96;
     const shift = 1n << 192n;
-    const PRICE_PRECISION = 1000000n;
-    const numerator = priceX96 * PRICE_PRECISION;
-    const ratio = numerator / shift;
-
-    // Adjust for decimals: Ratio * 10^(d0 - d1)
     const decimalDiff = BigInt(decimals0 - decimals1);
-    let adjusted = ratio;
+
+    // We want: result = (priceX96 * 10^decimalDiff) / 2^192
+
+    let num = priceX96;
+    let den = shift;
+
     if (decimalDiff > 0n) {
-        adjusted = ratio * (10n ** decimalDiff);
-    } else if (decimalDiff < 0n) {
-        adjusted = ratio / (10n ** (-decimalDiff));
+        num = num * (10n ** decimalDiff);
+    } else {
+        den = den * (10n ** (-decimalDiff));
     }
 
-    return (Number(adjusted) / Number(PRICE_PRECISION)).toFixed(2);
+    const floatPrecision = 1000000n; // 6 decimals precision
+    const resultBigInt = (num * floatPrecision) / den;
+
+    return (Number(resultBigInt) / Number(floatPrecision)).toFixed(6);
 }
 
 const FEERATE_TO_TICKSPACING: Record<number, number> = {
@@ -76,22 +83,22 @@ const OFFICIAL_POOL_KEYS = [
     {
         token0: "0x0000000000000000000000000000000000000000", // ETH
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 3000,
-        tickSpacing: 60,
+        fee: 10000,
+        tickSpacing: 200,
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     },
     {
         token0: "0x0000000000000000000000000000000000000000", // ETH
         token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
-        fee: 3000,
-        tickSpacing: 60,
+        fee: 10000, // Updated to 1%
+        tickSpacing: 200,
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     },
     {
         token0: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 3000,
-        tickSpacing: 60,
+        fee: 10000,
+        tickSpacing: 200,
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     }
 ];
@@ -122,8 +129,8 @@ export function PoolManager() {
     const [poolConfig, setPoolConfig] = useState({
         token0: "0x0000000000000000000000000000000000000000", // ETH (Native)
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 3000,
-        tickSpacing: 60,
+        fee: 10000, // 1% Fee
+        tickSpacing: 200, // 200 Ticks
         hooks: "0x97ed05d79F5D8C8a5B956e5d7B5272Ed903000c8"
     });
 
@@ -142,6 +149,61 @@ export function PoolManager() {
         }
     };
 
+
+    // Dynamic Pool Discovery
+    const POTENTIAL_FEES = [500, 3000, 10000];
+    const POTENTIAL_TICKS = [10, 60, 200];
+
+    // Check which pool config is actually initialized
+    const poolVariants = useMemo(() => {
+        return POTENTIAL_FEES.map((fee, i) => ({
+            ...poolConfig,
+            fee,
+            tickSpacing: POTENTIAL_TICKS[i] // Simply mapping indices 1:1 for now (3000->60, 10000->200)
+        }));
+    }, [poolConfig]);
+
+    const poolVariantIds = useMemo(() => {
+        return poolVariants.map(variant => getPoolId(
+            variant.token0 as `0x${string}`,
+            variant.token1 as `0x${string}`,
+            variant.fee,
+            variant.tickSpacing,
+            variant.hooks as `0x${string}`
+        ));
+    }, [poolVariants]);
+
+    // Batch fetch state for all variants
+    const { data: variantStates } = useReadContract({
+        address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
+        abi: POOL_MANAGER_ABI,
+        functionName: 'extsload',
+        args: [poolVariantIds.map(pid => getPoolStateSlot(pid)!)], // Fetch all slots
+        chainId: unichainSepolia.id,
+        query: {
+            enabled: !isWrongNetwork,
+            refetchInterval: 10000
+        }
+    });
+
+    // Auto-Select Initialized Pool
+    useEffect(() => {
+        if (!variantStates) return;
+
+        const states = variantStates as string[];
+        const initializedIndex = states.findIndex(val => hexToBigInt(val as `0x${string}`) !== 0n);
+
+        if (initializedIndex !== -1) {
+            const found = poolVariants[initializedIndex];
+            // Only update if different to avoid loops
+            if (found.fee !== poolConfig.fee || found.tickSpacing !== poolConfig.tickSpacing) {
+                console.log("PoolManager: Auto-Detected Initialized Pool!", found);
+                setPoolConfig(prev => ({ ...prev, fee: found.fee, tickSpacing: found.tickSpacing }));
+            }
+        }
+    }, [variantStates, poolVariants, poolConfig]);
+
+    // Current Active Pool ID (derived from auto-updated config)
     const poolId = useMemo(() => {
         return getPoolId(
             poolConfig.token0 as `0x${string}`,
@@ -152,17 +214,20 @@ export function PoolManager() {
         );
     }, [poolConfig]);
 
-    const poolStateSlot = useMemo(() => getPoolStateSlot(poolId), [poolId]);
+    // 4. Read Pool State (Slot0) for Active Pool
+    const poolStateSlot = useMemo(() => {
+        return getPoolStateSlot(poolId);
+    }, [poolId]);
 
-    // Check if pool exists by reading storage
     const { data: poolStateData, refetch: refetchPool } = useReadContract({
         address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
         abi: POOL_MANAGER_ABI,
-        functionName: "extsload",
-        args: [poolStateSlot],
+        functionName: 'extsload',
+        args: poolStateSlot ? [poolStateSlot] : undefined,
         chainId: unichainSepolia.id, // Explicitly query correct chain
         query: {
-            enabled: !isWrongNetwork
+            enabled: !!poolStateSlot && !isWrongNetwork,
+            refetchInterval: 5000
         }
     });
 
@@ -201,12 +266,14 @@ export function PoolManager() {
     const allPoolQueries = useMemo(() => {
         return allPoolKeys.map(pk => {
             const pid = getPoolId(pk.token0 as `0x${string}`, pk.token1 as `0x${string}`, pk.fee, pk.tickSpacing, pk.hooks as `0x${string}`);
-            const slot = getPoolStateSlot(pid);
+
+            const poolStateSlot = getPoolStateSlot(pid);
+
             return {
                 address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
                 abi: POOL_MANAGER_ABI,
                 functionName: "extsload",
-                args: [slot],
+                args: poolStateSlot ? [poolStateSlot] : undefined,
                 chainId: unichainSepolia.id
             } as const;
         });
@@ -219,46 +286,113 @@ export function PoolManager() {
         }
     });
 
+    // Fetch Balances
+    const { data: balance0 } = useBalance({ address: address, token: poolConfig.token0 === "0x0000000000000000000000000000000000000000" ? undefined : poolConfig.token0 as `0x${string}` });
+    const { data: balance1 } = useBalance({ address: address, token: poolConfig.token1 === "0x0000000000000000000000000000000000000000" ? undefined : poolConfig.token1 as `0x${string}` });
+
+    const inputBalance = zeroForOne ? balance0 : balance1;
+
     // Estimation Logic for Test Swap
     const estimatedOutput = useMemo(() => {
-        if (!poolStateData || !swapAmount || isNaN(Number(swapAmount))) return null;
+        if (!swapAmount || isNaN(Number(swapAmount))) return null;
+        if (!poolStateData) {
+            console.log("EstimatedOutput: poolStateData is missing", poolStateData);
+            return null;
+        }
 
         const val = hexToBigInt(poolStateData as `0x${string}`);
-        if (val === 0n) return null; // Uninitialized
+        console.log("EstimatedOutput: Raw poolStateData val", val);
 
-        const sqrtP = val & ((1n << 160n) - 1n);
+        if (val === 0n) {
+            console.log("EstimatedOutput: Pool not initialized (val is 0)");
+            return null;
+        }
 
-        const tA = getTokenByAddress(poolConfig.token0);
-        const tB = getTokenByAddress(poolConfig.token1);
+        // sqrtPriceX96 is in lower 160 bits (Slot0)
+        // Standard V4 Pool.State includes Slot0 at offset 0.
+        // However, we are reading the merged slot.
+        // extsload returns 32 bytes.
+        // Slot0 struct: sqrtPriceX96 (160), tick (24), protocolFee (24), lpFee (24) = 232 bits.
+        // 232 bits fits in 256 bits (32 bytes).
+        // So the returned val contains the packed Slot0.
 
-        if (!tA || !tB) return null;
+        // Extract sqrtPriceX96 (low 160 bits)
+        const sqrtPriceX96 = val & ((1n << 160n) - 1n);
+        console.log("EstimatedOutput: sqrtPriceX96", sqrtPriceX96);
+
+        if (sqrtPriceX96 === 0n) {
+            console.log("EstimatedOutput: sqrtPriceX96 is 0");
+            return null;
+        }
+
+        const amountIn = Number(swapAmount);
+
+        // Get decimals
+        const tA = getTokenByAddress(poolConfig.token0) || {
+            address: poolConfig.token0 as `0x${string}`,
+            decimals: 18
+        };
+        const tB = getTokenByAddress(poolConfig.token1) || {
+            address: poolConfig.token1 as `0x${string}`,
+            decimals: 18
+        };
 
         // Canonical Sorting to match PoolKey
         const [c0, c1] = tA.address.toLowerCase() < tB.address.toLowerCase() ? [tA, tB] : [tB, tA];
 
-        // Price of C0 in terms of C1 (How much C1 for 1 C0)
-        const priceC0inC1 = Number(sqrtPriceToPrice(sqrtP, c0.decimals, c1.decimals));
+        console.log("EstimatedOutput: Decimals", c0.decimals, c1.decimals);
 
-        const amountIn = Number(swapAmount);
-        const isTA_C0 = tA.address.toLowerCase() === c0.address.toLowerCase();
-
-        // Determine if input is C0 or C1
-        // zeroForOne (UI State) means Input is poolConfig.token0 (tA)
-        // !zeroForOne (UI State) means Input is poolConfig.token1 (tB)
-        const isInputC0 = (zeroForOne && isTA_C0) || (!zeroForOne && !isTA_C0);
-
-        let out = 0;
-        if (isInputC0) {
-            // Selling C0 -> Buying C1 (Multiply by Price)
-            out = amountIn * priceC0inC1;
-        } else {
-            // Selling C1 -> Buying C0 (Divide by Price)
-            out = amountIn / priceC0inC1;
+        let priceC0inC1;
+        try {
+            priceC0inC1 = sqrtPriceToPrice(sqrtPriceX96, c0.decimals, c1.decimals);
+            console.log("EstimatedOutput: Price C0 in C1", priceC0inC1);
+        } catch (e) {
+            console.error("EstimatedOutput: Calculation error", e);
+            return null;
         }
 
-        // Format based on the output token
-        // If input is C0, output is C1. If input is C1, output is C0.
-        // But specifically we want to format nicely.
+        // Determine input token
+        // zeroForOne means Token0 -> Token1
+        // Token0 is c0. Token1 is c1.
+
+        // Input is User Selected Input.
+        // If zeroForOne: Input is c0. We want output in c1.
+        // Output = Input (c0) * Price (c1/c0).
+        // Price above is "Price of c0 in c1" ? 
+        // sqrtPriceToPrice formula:
+        // priceX96 = sqrt * sqrt.
+        // c0 is token0. c1 is token1.
+        // price = (amount1 / amount0).
+        // So yes, price is "Amount of c1 per 1 c0".
+
+        let out = 0;
+
+        // We must check if poolConfig order matches canonical order
+        const configIsCanonical = poolConfig.token0.toLowerCase() === c0.address.toLowerCase();
+
+        // If zeroForOne (UI State):
+        //   Input = poolConfig.token0. Output = poolConfig.token1.
+        //   If configIsCanonical: Input = c0. Output = c1.
+        //      out = amountIn * price (c1/c0)
+        //   If !configIsCanonical: Input = c1. Output = c0. (Wait, poolConfig.token0 would be c1).
+        //      out = amountIn / price (c1/c0)
+
+        // Let's simplify:
+        // isInputC0 means "Is the input token the canonical token0?"
+        // Input token is `zeroForOne ? poolConfig.token0 : poolConfig.token1`.
+
+        const inputTokenAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
+        const isInputC0 = inputTokenAddr.toLowerCase() === c0.address.toLowerCase();
+
+        console.log("EstimatedOutput: isInputC0", isInputC0);
+
+        if (isInputC0) {
+            out = amountIn * Number(priceC0inC1);
+        } else {
+            if (Number(priceC0inC1) === 0) return null;
+            out = amountIn / Number(priceC0inC1);
+        }
+
         return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
     }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1]);
 
@@ -808,20 +942,56 @@ export function PoolManager() {
                                 </p>
 
                                 <div className="space-y-6 max-w-md mx-auto">
+                                    {/* Input Field */}
                                     <div className="bg-black/40 p-4 rounded-xl border border-white/10">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="text-xs font-medium text-white/60">Amount In</span>
-                                            <span className="text-xs font-bold text-white">{zeroForOne ? token0?.symbol : token1?.symbol}</span>
+                                            {inputBalance && (
+                                                <div className="text-xs text-text-muted flex items-center gap-2">
+                                                    <span>Balance: {Number(inputBalance.formatted).toFixed(4)}</span>
+                                                    <button
+                                                        className="text-primary hover:text-white transition-colors uppercase font-bold text-[10px]"
+                                                        onClick={() => setSwapAmount(inputBalance.formatted)}
+                                                    >
+                                                        Max
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                        <input
-                                            type="text"
-                                            value={swapAmount}
-                                            onChange={(e) => setSwapAmount(e.target.value)}
-                                            className="w-full bg-transparent text-2xl font-mono text-white outline-none placeholder:text-white/20"
-                                            placeholder="0.0"
-                                        />
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="text"
+                                                value={swapAmount}
+                                                onChange={(e) => setSwapAmount(e.target.value)}
+                                                className="w-full bg-transparent text-2xl font-mono text-white outline-none placeholder:text-white/20"
+                                                placeholder="0.0"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    console.log("Setting selector type for input token");
+                                                    setSelectorType(zeroForOne ? 'token0' : 'token1');
+                                                }}
+                                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 transition-all group"
+                                            >
+                                                {(zeroForOne ? token0 : token1)?.logo && (
+                                                    <Image
+                                                        src={(zeroForOne ? token0 : token1)?.logo!}
+                                                        alt="T"
+                                                        width={20}
+                                                        height={20}
+                                                        className="rounded-full"
+                                                        unoptimized
+                                                    />
+                                                )}
+                                                <span className="font-bold text-white text-sm">
+                                                    {zeroForOne ? token0?.symbol : token1?.symbol}
+                                                </span>
+                                                <span className="material-symbols-outlined text-sm opacity-60 group-hover:rotate-180 transition-transform">expand_more</span>
+                                            </button>
+                                        </div>
                                     </div>
 
+                                    {/* Swap Direction Toggle */}
                                     <div className="flex justify-center">
                                         <button
                                             onClick={() => setZeroForOne(!zeroForOne)}
@@ -831,27 +1001,51 @@ export function PoolManager() {
                                         </button>
                                     </div>
 
+                                    {/* Output Field (Estimated) */}
                                     <div className="bg-black/40 p-4 rounded-xl border border-white/10 opacity-60">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="text-xs font-medium text-white/60">To (Estimated)</span>
-                                            <span className="text-xs font-bold text-white">{zeroForOne ? token1?.symbol : token0?.symbol}</span>
                                         </div>
-                                        <div className="text-2xl font-mono text-white/50">
-                                            {estimatedOutput ? (
-                                                <span className="text-emerald-400">~{estimatedOutput}</span>
-                                            ) : (
-                                                <span className="animate-pulse">?</span>
-                                            )}
+                                        <div className="flex items-center justify-between">
+                                            <div className="text-2xl font-mono text-white/50">
+                                                {estimatedOutput ? (
+                                                    <span className="text-emerald-400">~{estimatedOutput}</span>
+                                                ) : (
+                                                    <span className="animate-pulse">?</span>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    console.log("Setting selector type for output token");
+                                                    setSelectorType(zeroForOne ? 'token1' : 'token0');
+                                                }}
+                                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 transition-all group opacity-80 hover:opacity-100"
+                                            >
+                                                {(zeroForOne ? token1 : token0)?.logo && (
+                                                    <Image
+                                                        src={(zeroForOne ? token1 : token0)?.logo!}
+                                                        alt="T"
+                                                        width={20}
+                                                        height={20}
+                                                        className="rounded-full"
+                                                        unoptimized
+                                                    />
+                                                )}
+                                                <span className="font-bold text-white text-sm">
+                                                    {zeroForOne ? token1?.symbol : token0?.symbol}
+                                                </span>
+                                                <span className="material-symbols-outlined text-sm opacity-60 group-hover:rotate-180 transition-transform">expand_more</span>
+                                            </button>
                                         </div>
                                     </div>
-
-                                    <button
-                                        onClick={handleSwap}
-                                        className="w-full py-4 mt-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-display tracking-widest rounded-xl transition-all shadow-glow hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
-                                    >
-                                        SWAP VIA EIDOLON ROUTER
-                                    </button>
                                 </div>
+
+                                <button
+                                    onClick={handleSwap}
+                                    className="w-full py-4 mt-4 bg-emerald-500 hover:bg-emerald-400 text-black font-bold font-display tracking-widest rounded-xl transition-all shadow-glow hover:shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                                >
+                                    SWAP VIA EIDOLON ROUTER
+                                </button>
                             </div>
                         )}
 
@@ -903,6 +1097,6 @@ export function PoolManager() {
                     </>
                 )}
             </div>
-        </div>
+        </div >
     );
 }

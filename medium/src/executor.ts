@@ -79,10 +79,15 @@ export class Executor {
 
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
         const normalize = (addr: string) => {
-            if (addr === "ETH") return ZERO_ADDRESS;
-            if (addr === "USDC") return "0x31d0220469e10c4E71834a79b1f276d740d3768F";
-            if (addr === "WETH") return "0x4200000000000000000000000000000000000006";
-            return addr;
+            if (!addr) return ZERO_ADDRESS;
+            const clean = addr.trim();
+            if (clean === "ETH") return ZERO_ADDRESS;
+            if (clean === "USDC") return "0x31d0220469e10c4E71834a79b1f276d740d3768F";
+            if (clean === "WETH") return "0x4200000000000000000000000000000000000006";
+            if (clean === "eiETH") return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
+            // Case-insensitive check
+            if (clean.toLowerCase() === "eieth") return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
+            return clean;
         };
 
         const tokenA = normalize(order.tokenA);
@@ -150,8 +155,8 @@ export class Executor {
             const poolKey = {
                 currency0: currency0 as `0x${string}`,
                 currency1: currency1 as `0x${string}`,
-                fee: order.fee || 3000,
-                tickSpacing: order.tickSpacing || 60,
+                fee: order.fee || 10000, // Updated to 1% (10000)
+                tickSpacing: order.tickSpacing || 200, // Updated to 200
                 hooks: (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
             };
 
