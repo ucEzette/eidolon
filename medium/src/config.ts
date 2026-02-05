@@ -11,7 +11,8 @@ export const CONFIG = {
     }
 };
 
-console.log("Loaded CONFIG:", CONFIG);
+import util from 'util';
+console.log("Loaded CONFIG:", util.inspect(CONFIG, { depth: null, colors: true, maxStringLength: null }));
 
 
 if (!CONFIG.PRIVATE_KEY) {

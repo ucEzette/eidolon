@@ -9,5 +9,10 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true
-    }
+    },
+    "exclude": [
+        "scripts",
+        "node_modules",
+        "dist"
+    ]
 }

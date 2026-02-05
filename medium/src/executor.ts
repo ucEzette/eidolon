@@ -88,9 +88,14 @@ export class Executor {
         const normalize = (addr: string) => {
             if (!addr) return ZERO_ADDRESS;
             const clean = addr.trim();
+
+            // FAIL FAST on truncated addresses
+            if (clean.includes("...")) {
+                console.error(`❌ CRITICAL: Truncated address detected in data: "${clean}"`);
+                throw new Error(`Data Contamination: Address "${clean}" is truncated.`);
+            }
+
             // Map ETH to WETH purely for the `permit.currency` field (Permit2 doesn't support ETH)
-            // But we might need to be careful if PoolKey uses ETH (0x0)
-            // Actually, for intents, the user signs for WETH.
             if (clean === "ETH") return WETH_ADDRESS;
             if (clean === "USDC") return USDC_ADDRESS;
             if (clean === "WETH") return WETH_ADDRESS;

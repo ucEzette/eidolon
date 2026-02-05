@@ -1,4 +1,5 @@
 const Redis = require("ioredis");
+require("dotenv").config();
 
 // Use env var or default
 const redisUrl = process.env.REDIS_URL;
