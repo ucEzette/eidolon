@@ -309,23 +309,36 @@ export function PoolManager() {
     // Estimation Logic for Test Swap
     const estimatedOutput = useMemo(() => {
         if (!swapAmount || isNaN(Number(swapAmount))) return null;
-        if (!poolStateData) {
-            console.log("EstimatedOutput: poolStateData is missing", poolStateData);
-            return null;
-        }
+
+        // Log everything for debugging
+        const hasGridPool = !!poolStateData;
+        console.log("EstimatedOutput DEBUG: Start", {
+            poolStateData,
+            hasGridPool,
+            poolGhostLiquidity,
+            swapAmount,
+            decimals0,
+            decimals1,
+            manualPrice: price
+        });
 
         const val = BigInt(!poolStateData ? 0 : poolStateData as string);
-        // console.log("EstimatedOutput: Raw poolStateData val", val);
-
-        // sqrtPriceX96 is in lower 160 bits (Slot0)
         let sqrtPriceX96 = val & ((1n << 160n) - 1n);
 
+        console.log("EstimatedOutput DEBUG: Initial sqrtPriceX96", sqrtPriceX96.toString());
+
         // HYBRID QUOTER LOGIC:
-        // If On-Chain is 0, check Ghost Liquidity OR if we have a manually set Price (Persistence)
-        if (sqrtPriceX96 === 0n) {
+        // If On-Chain is 0 (or close to MIN_SQRT_PRICE), check Ghost Liquidity OR if we have a manually set Price
+        // 1n << 64n is a safe lower bound for reasonable prices (approx 10^-10)
+        // The debug log showed 4295128740 which is ~2^32 (MIN_SQRT_PRICE)
+        const isEffectivelyZero = sqrtPriceX96 < (1n << 64n);
+
+        if (isEffectivelyZero) {
             // Check if we have active spirits (Ghost Liquidity)
             const hasSpirits = poolGhostLiquidity.count > 0;
             const validPrice = price && !isNaN(Number(price));
+
+            console.log("EstimatedOutput DEBUG: Zero Price Detected. Checking Fallbacks:", { hasSpirits, validPrice });
 
             if (hasSpirits || validPrice) {
                 // If we have spirits but no price, default to 1 (Parity) for estimation 
@@ -333,24 +346,20 @@ export function PoolManager() {
                 // If user entered price, use that.
                 const virtualPrice = validPrice ? Number(price) : 1;
 
-                // console.log("👻 Ghost Quoter Active: Using Virtual Price", virtualPrice);
-
-                const t0 = getTokenByAddress(poolConfig.token0);
-                const t1 = getTokenByAddress(poolConfig.token1);
-
-                const d0 = t0?.decimals || 18;
-                const d1 = t1?.decimals || 18;
+                console.log("EstimatedOutput DEBUG: Using Virtual Price Fallback", virtualPrice);
 
                 try {
                     sqrtPriceX96 = BigInt(getSqrtPriceX96(virtualPrice, decimals0, decimals1));
+                    console.log("EstimatedOutput DEBUG: Calculated Virtual sqrtPriceX96", sqrtPriceX96.toString());
                 } catch (e) {
                     console.error("Ghost Quoter Calc Error", e);
                 }
             }
         }
 
-        if (sqrtPriceX96 === 0n) {
-            console.log("EstimatedOutput: sqrtPriceX96 is 0 and no Ghost Liquidity found.");
+        // Re-evaluate check after potential fallback calculation
+        if (sqrtPriceX96 < (1n << 64n)) {
+            console.log("EstimatedOutput: sqrtPriceX96 is effectively 0 and no Ghost Liquidity found.");
             return null;
         }
 
@@ -365,7 +374,7 @@ export function PoolManager() {
         let priceC0inC1;
         try {
             priceC0inC1 = sqrtPriceToPrice(sqrtPriceX96, c0Decimals, c1Decimals);
-            console.log("EstimatedOutput: Price C0 in C1", priceC0inC1);
+            console.log("EstimatedOutput DEBUG: Price C0 in C1", priceC0inC1);
         } catch (e) {
             console.error("EstimatedOutput: Calculation error", e);
             return null;
@@ -378,14 +387,20 @@ export function PoolManager() {
         const inputAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
         const isInputC0 = inputAddr.toLowerCase() === canonical0Addr.toLowerCase();
 
-        console.log("EstimatedOutput: isInputC0", isInputC0);
+        console.log("EstimatedOutput DEBUG: Direction", { isInputC0, amountIn, priceC0inC1 });
 
         if (isInputC0) {
             out = amountIn * Number(priceC0inC1);
         } else {
-            if (Number(priceC0inC1) === 0) return null;
-            out = amountIn / Number(priceC0inC1);
+            const p = Number(priceC0inC1);
+            if (p === 0) {
+                console.log("EstimatedOutput DEBUG: Price is 0, cannot divide");
+                return null;
+            }
+            out = amountIn / p;
         }
+
+        console.log("EstimatedOutput DEBUG: Final Output", out);
 
         return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
     }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1, poolGhostLiquidity, price, decimals0, decimals1]);
