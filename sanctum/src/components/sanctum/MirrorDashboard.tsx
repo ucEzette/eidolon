@@ -65,12 +65,14 @@ export function MirrorDashboard() {
         earnings.eiETH > 0 ? `${earnings.eiETH.toFixed(4)} eiETH` : null
     ].filter(Boolean).join(" + ") || "0.00";
 
-    const userPositions = isConnected && address
-        ? positions.filter(p => p.provider && p.provider.toLowerCase() === address.toLowerCase())
+    const userPositions = isConnected && address && Array.isArray(positions)
+        ? positions.filter(p => p && p.provider && typeof p.provider === 'string' && p.provider.toLowerCase() === address.toLowerCase())
         : [];
 
-    const activePositions = userPositions.filter(p => p.status === 'Active');
-    const totalPoints = activePositions.length * 100 + (membership.isMember ? 500 : 0);
+    const activePositions = Array.isArray(userPositions)
+        ? userPositions.filter(p => p && p.status === 'Active')
+        : [];
+    const totalPoints = activePositions.length * 100 + (membership?.isMember ? 500 : 0);
 
     // ... (keep existing variables)
 

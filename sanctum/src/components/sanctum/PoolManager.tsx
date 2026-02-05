@@ -632,10 +632,13 @@ export function PoolManager() {
                 return;
             } // --- END DIRECT MODE ---
 
-            // 2. Sign Ghost Permit (The "Intent")
-            // This authorizes the Bot to pull 'swapAmount' from user's wallet
+            // Map Native ETH to WETH for signing (Permit2/Hook requirement)
+            const tokenToSign = (permitToken as string) === "0x0000000000000000000000000000000000000000"
+                ? "0x4200000000000000000000000000000000000006" as `0x${string}` // WETH on Unichain Sepolia
+                : permitToken as `0x${string}`;
+
             const result = await signPermit(
-                permitToken as `0x${string}`,
+                tokenToSign,
                 swapAmount,
                 poolId,
                 false, // One-sided liquidity (User just wants to swap, effectively providing 1-sided to the pool temporarily)
@@ -654,7 +657,7 @@ export function PoolManager() {
                 tokenB: zeroForOne ? poolConfig.token1 : poolConfig.token0, // Target (Output)
                 amountA: swapAmount,
                 amountB: "0",
-                expiry: Date.now() + (30 * 60 * 1000),
+                expiry: Number(result.deadline) * 1000, // Use EXACT deadline from signature
                 signature: result.signature,
                 liquidityMode: 'one-sided', // Swaps are inherently one-sided inputs
                 nonce: result.nonce.toString(),
