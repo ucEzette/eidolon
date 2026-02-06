@@ -2,18 +2,18 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
-import { TOKENS, type Token } from "@/config/tokens";
 import { useLocalStorage } from "usehooks-ts";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
-import { CONTRACTS, unichainSepolia } from "@/config/web3";
-import { formatUnits, parseUnits, encodeAbiParameters, keccak256, erc20Abi } from 'viem';
+import { CONTRACTS, unichainSepolia, POOLS } from "@/config/web3";
+import { parseUnits, erc20Abi } from 'viem';
 import { toast } from "sonner";
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, useBalance, useReadContracts, useChainId, useSwitchChain, usePublicClient } from 'wagmi';
-import { getPoolId, getSqrtPriceX96, getPoolStateSlot, getTicksStateSlot, getTokenByAddress, sqrtPriceToPrice } from "@/utils/uniswap";
-import { parseAbi, hexToBigInt, type Address } from "viem";
+import { useAccount, useReadContract, useWriteContract, useBalance, useReadContracts, useChainId, useSwitchChain, usePublicClient } from 'wagmi';
+import { getPoolId, getSqrtPriceX96, getPoolStateSlot, getTokenByAddress, sqrtPriceToPrice } from "@/utils/uniswap";
+import { parseAbi, hexToBigInt } from "viem";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
 import { useGhostPermit } from "@/hooks/useGhostPermit";
 import Link from "next/link";
+import { TOKENS, TOKEN_MAP } from "@/config/tokens";
 
 const POOL_MANAGER_ABI = parseAbi([
     "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
@@ -22,28 +22,19 @@ const POOL_MANAGER_ABI = parseAbi([
     "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes testSettings) external payable returns (int256 delta)"
 ]);
 
-const ROUTER_ABI = parseAbi([
-    "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, (bool takeClaims, bool settleUsingBurn) testSettings, bytes hookData) external payable returns (int256 delta)"
-]);
-
 const EXECUTOR_ABI = parseAbi([
     "function execute((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData, address recipient) external payable returns (int256 delta)"
 ]);
 
-// Helper for Pool State Slot
-const POOLS_MAPPING_SLOT = 6n;
 
+// Helper for Pool State Slot
+// const POOLS_MAPPING_SLOT = 6n;
 
 function truncateAddress(address: string) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 
-const FEERATE_TO_TICKSPACING: Record<number, number> = {
-    500: 10,
-    3000: 60,
-    10000: 200
-};
 
 interface Activity {
     id: string;
@@ -54,29 +45,34 @@ interface Activity {
 }
 
 // Official Pools Defined Outside Component to prevent re-creation
+// Official Pools Defined Outside Component to prevent re-creation
 const OFFICIAL_POOL_KEYS = [
     {
-        token0: "0x0000000000000000000000000000000000000000", // ETH
-        token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
+        token0: TOKENS.find(t => t.symbol === "ETH")?.address || "0x0000000000000000000000000000000000000000",
+        token1: TOKENS.find(t => t.symbol === "USDC")?.address || "0x31d0220469e10c4E71834a79b1f276d740d3768F",
         fee: 3000,
         tickSpacing: 60,
-        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
+        hooks: CONTRACTS.unichainSepolia.eidolonHook
     },
     {
-        token0: "0x0000000000000000000000000000000000000000", // ETH
-        token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
+        token0: TOKENS.find(t => t.symbol === "ETH")?.address || "0x0000000000000000000000000000000000000000",
+        token1: TOKENS.find(t => t.symbol === "eiETH")?.address || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6",
         fee: 3000,
-        tickSpacing: 60,
-        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
+        tickSpacing: 200,
+        hooks: CONTRACTS.unichainSepolia.eidolonHook
     },
     {
-        token0: "0x4200000000000000000000000000000000000006", // WETH
-        token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
+        token0: TOKENS.find(t => t.symbol === "WETH")?.address || "0x4200000000000000000000000000000000000006",
+        token1: TOKENS.find(t => t.symbol === "eiETH")?.address || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6",
         fee: 3000,
-        tickSpacing: 200, // Valid WETH Pool
-        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
+        tickSpacing: 200,
+        hooks: CONTRACTS.unichainSepolia.eidolonHook
     }
 ];
+
+// Dynamic Pool Discovery Constants
+const POTENTIAL_FEES = [500, 3000, 10000];
+const POTENTIAL_TICKS = [10, 60, 200];
 
 export function PoolManager() {
     const { address, isConnected } = useAccount();
@@ -104,24 +100,27 @@ export function PoolManager() {
     const [selectorType, setSelectorType] = useState<'token0' | 'token1' | null>(null);
 
     // Configuration
-    const [poolConfig, setPoolConfig] = useState({
-        token0: "0x0000000000000000000000000000000000000000", // ETH (Native)
-        token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 100, // 0.01% Fee (Updated Default)
-        tickSpacing: 60, // 60 Ticks
-        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
+    const [poolConfig, setPoolConfig] = useState<{
+        token0: string;
+        token1: string;
+        fee: number;
+        tickSpacing: number;
+        hooks: string;
+    }>({
+        token0: TOKENS.find(t => t.symbol === "ETH")?.address || "0x0000000000000000000000000000000000000000",
+        token1: TOKENS.find(t => t.symbol === "USDC")?.address || "0x31d0220469e10c4E71834a79b1f276d740d3768F",
+        fee: POOLS.canonical.fee,
+        tickSpacing: POOLS.canonical.tickSpacing,
+        hooks: CONTRACTS.unichainSepolia.eidolonHook
     });
 
-    // Auto-Set Tick Spacing for WETH/eiETH to 200
-    useEffect(() => {
-        const isWeth = poolConfig.token0.toLowerCase() === "0x4200000000000000000000000000000000000006".toLowerCase();
-        const isEieth = poolConfig.token1.toLowerCase() === "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6".toLowerCase();
+    // Constants for address checking
+    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-        if (isWeth && isEieth && poolConfig.tickSpacing !== 60) {
-            console.log("Auto-switching WETH/eiETH to Tick 60 (Valid Pool)");
-            setPoolConfig(prev => ({ ...prev, tickSpacing: 60 }));
-        }
-    }, [poolConfig.token0, poolConfig.token1]);
+    // Auto-Set logic removed to give users full liberty.
+    /*
+    useEffect(() => { ... })
+    */
 
     // Network Check & Auto-Switch
     const isWrongNetwork = chainId !== unichainSepolia.id;
@@ -140,8 +139,6 @@ export function PoolManager() {
 
 
     // Dynamic Pool Discovery
-    const POTENTIAL_FEES = [500, 3000, 10000];
-    const POTENTIAL_TICKS = [10, 60, 200];
 
     // Check which pool config is actually initialized
     const poolVariants = useMemo(() => {
@@ -163,11 +160,11 @@ export function PoolManager() {
     }, [poolVariants]);
 
     // Batch fetch state for all variants (Using extsload at Slot 6 because getSlot0 is broken)
-    const { data: variantStates } = useReadContract({
+    const { } = useReadContract({
         address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
         abi: POOL_MANAGER_ABI,
         functionName: 'extsload',
-        args: [poolVariantIds.map(pid => getPoolStateSlot(pid)!)], // Fetch all slots
+        args: [poolVariantIds.map(pid => getPoolStateSlot(pid) || "0x0000000000000000000000000000000000000000000000000000000000000000")],
         chainId: unichainSepolia.id,
         query: {
             enabled: !isWrongNetwork,
@@ -210,14 +207,9 @@ export function PoolManager() {
         let total1 = 0;
 
         relevant.forEach(p => {
-            // We need to map p.tokenA/B to poolConfig.token0/1 (Case Insensitive)
-            const pTokenA = p.tokenA === "ETH" ? "0x0000000000000000000000000000000000000000" :
-                (p.tokenA === "USDC" ? "0x31d0220469e10c4E71834a79b1f276d740d3768F" :
-                    (p.tokenA === "eiETH" ? "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" : p.tokenA));
-
-            const pTokenB = p.tokenB === "ETH" ? "0x0000000000000000000000000000000000000000" :
-                (p.tokenB === "USDC" ? "0x31d0220469e10c4E71834a79b1f276d740d3768F" :
-                    (p.tokenB === "eiETH" ? "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" : p.tokenB));
+            // Dictionary check for address normalization
+            const pTokenA = TOKEN_MAP[p.tokenA]?.address || p.tokenA;
+            const pTokenB = TOKEN_MAP[p.tokenB]?.address || p.tokenB;
 
             if (pTokenA.toLowerCase() === poolConfig.token0.toLowerCase()) {
                 total0 += Number(p.amountA);
@@ -241,18 +233,18 @@ export function PoolManager() {
     // FETCH TOKEN METADATA DYNAMICALLY
     const { data: tokenMetadata } = useReadContracts({
         contracts: [
-            { address: poolConfig.token0 === "0x0000000000000000000000000000000000000000" ? undefined : poolConfig.token0 as `0x${string}`, abi: erc20Abi, functionName: 'decimals' },
-            { address: poolConfig.token1 === "0x0000000000000000000000000000000000000000" ? undefined : poolConfig.token1 as `0x${string}`, abi: erc20Abi, functionName: 'decimals' },
-            // Add symbols later if needed for display, but decimals are critical for math
+            { address: poolConfig.token0 === ZERO_ADDRESS ? undefined : poolConfig.token0 as `0x${string}`, abi: erc20Abi, functionName: 'decimals' },
+            { address: poolConfig.token1 === ZERO_ADDRESS ? undefined : poolConfig.token1 as `0x${string}`, abi: erc20Abi, functionName: 'decimals' },
+            // Add symbols later if needed for display, but decimals are critical for protection
         ],
         query: {
-            enabled: !isWrongNetwork && poolConfig.token0 !== "0x0000000000000000000000000000000000000000" && poolConfig.token1 !== "0x0000000000000000000000000000000000000000",
+            enabled: !isWrongNetwork && poolConfig.token0 !== ZERO_ADDRESS && poolConfig.token1 !== ZERO_ADDRESS,
             staleTime: 60000,
         }
     });
 
-    const decimals0 = poolConfig.token0 === "0x0000000000000000000000000000000000000000" ? 18 : (tokenMetadata?.[0]?.result as number || 18);
-    const decimals1 = poolConfig.token1 === "0x0000000000000000000000000000000000000000" ? 18 : (tokenMetadata?.[1]?.result as number || 18);
+    const decimals0 = poolConfig.token0 === ZERO_ADDRESS ? 18 : (tokenMetadata?.[0]?.result as number || 18);
+    const decimals1 = poolConfig.token1 === ZERO_ADDRESS ? 18 : (tokenMetadata?.[1]?.result as number || 18);
 
     // 4. Read Pool State using extsload (Slot 6) because getSlot0 is broken
     const poolStateSlot = useMemo(() => {
@@ -274,7 +266,7 @@ export function PoolManager() {
 
     const isPoolInitialized = useMemo(() => {
         if (!poolStateData) return false;
-        return hexToBigInt(poolStateData as any) !== 0n;
+        return hexToBigInt(poolStateData as `0x${string}`) !== 0n;
     }, [poolStateData]);
 
     // Local Storage for User-Imported Pools & Activity
@@ -286,7 +278,7 @@ export function PoolManager() {
         if (!mounted) return OFFICIAL_POOL_KEYS;
 
         const keys = [...OFFICIAL_POOL_KEYS];
-        customPools.forEach((cp: any) => {
+        customPools.forEach((cp) => {
             const exists = keys.some(k =>
                 (k.token0 === cp.token0 && k.token1 === cp.token1 && k.fee === cp.fee) ||
                 (k.token0 === cp.token1 && k.token1 === cp.token0 && k.fee === cp.fee)
@@ -444,7 +436,7 @@ export function PoolManager() {
     }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1, poolGhostLiquidity, price, decimals0, decimals1]);
 
     const handleInitialize = async () => {
-        if (!isConnected) {
+        if (!isConnected || !address) {
             toast.error("Wallet not connected", { description: "Please connect your wallet to initialize a pool." });
             return;
         }
@@ -508,14 +500,19 @@ export function PoolManager() {
             setActivities(prev => [newActivity, ...prev]);
 
             // Save to Local Storage as Custom Pool
-            setCustomPools(prev => [...prev, poolConfig]);
+            setCustomPools(prev => [...prev, {
+                ...poolConfig,
+                token0: poolConfig.token0 as `0x${string}`,
+                token1: poolConfig.token1 as `0x${string}`,
+                hooks: poolConfig.hooks as `0x${string}`
+            }]);
 
             setTimeout(() => { refetchPool(); }, 5000);
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            toast.error("Initialization Failed", { description: e.shortMessage || e.message || "Unknown error" });
+            const message = e instanceof Error ? e.message : "Initialization Failed";
+            toast.error("Initialization Failed", { description: message });
         }
     };
 
@@ -523,11 +520,11 @@ export function PoolManager() {
     const token1 = getTokenByAddress(poolConfig.token1);
 
     // Hooks for Intent-Based Swapping
-    const { signPermit, isPending: isSignPending } = useGhostPermit();
+    const { signPermit } = useGhostPermit();
     const { addPosition } = useGhostPositions();
 
     const handleSwap = async () => {
-        if (!isConnected) {
+        if (!isConnected || !address) {
             toast.error("Wallet not connected");
             return;
         }
@@ -548,7 +545,6 @@ export function PoolManager() {
             // Determine Input Token
             // If zeroForOne (Token0 -> Token1), we are selling Token0.
             const inputToken = zeroForOne ? poolConfig.token0 : poolConfig.token1;
-            const outputToken = zeroForOne ? poolConfig.token1 : poolConfig.token0;
             const inputSymbol = zeroForOne ? sym0 : sym1;
             const decimals = zeroForOne ? decimals0 : decimals1;
 
@@ -557,14 +553,15 @@ export function PoolManager() {
             // Executor will treat ETH intents as WETH permits.
             // IMPORTANT: The PoolID we sign must match the PoolID the bot executes against (which is WETH/USDC)
 
-            const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-            const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+            // Config constants derived dynamically
+            const ETH_ADDR = TOKEN_MAP["ETH"]?.address || "0x0000000000000000000000000000000000000000";
+            const WETH_ADDR = TOKEN_MAP["WETH"]?.address || "0x4200000000000000000000000000000000000006";
 
             let t0_calc = poolConfig.token0;
             let t1_calc = poolConfig.token1;
 
-            if (t0_calc === ZERO_ADDRESS) t0_calc = WETH_ADDRESS;
-            if (t1_calc === ZERO_ADDRESS) t1_calc = WETH_ADDRESS;
+            if (t0_calc === ETH_ADDR) t0_calc = WETH_ADDR;
+            if (t1_calc === ETH_ADDR) t1_calc = WETH_ADDR;
 
             // Canonical Sorting for WETH-normalized addresses
             const [c0, c1] = t0_calc.toLowerCase() < t1_calc.toLowerCase()
@@ -593,8 +590,10 @@ export function PoolManager() {
             let permitToken = inputToken;
             let permitSymbol = inputSymbol;
 
-            if (inputToken === ZERO_ADDRESS) {
-                permitToken = WETH_ADDRESS;
+
+
+            if (inputToken === ETH_ADDR) {
+                permitToken = WETH_ADDR;
                 permitSymbol = "WETH"; // Ensure relayer gets "WETH"
             }
 
@@ -604,26 +603,28 @@ export function PoolManager() {
                 // Using permitToken (WETH) because Executor calls transferFrom on it
                 const amountRaw = parseUnits(swapAmount, decimals);
 
-                const allowance = await publicClient!.readContract({
-                    address: permitToken as `0x${string}`,
-                    abi: erc20Abi,
-                    functionName: 'allowance',
-                    args: [address!, CONTRACTS.unichainSepolia.executor as `0x${string}`]
-                });
-
-                if (allowance < amountRaw) {
-                    toast.info(`Approving ${permitSymbol} for Executor...`);
-                    const hash = await writeContractAsync({
+                if (publicClient) {
+                    const allowance = await publicClient.readContract({
                         address: permitToken as `0x${string}`,
                         abi: erc20Abi,
-                        functionName: 'approve',
-                        args: [CONTRACTS.unichainSepolia.executor as `0x${string}`, amountRaw]
+                        functionName: 'allowance',
+                        args: [address, CONTRACTS.unichainSepolia.executor as `0x${string}`]
                     });
-                    toast.success("Approval Sent", { description: "Waiting for confirmation..." });
-                    // Ideally we wait for receipt here, but let's just proceed or let user click again if it fails
-                    // For better UX, we should wait.
-                    // Simple wait
-                    await new Promise(r => setTimeout(r, 4000));
+
+                    if (allowance < amountRaw) {
+                        toast.info(`Approving ${permitSymbol} for Executor...`);
+                        await writeContractAsync({
+                            address: permitToken as `0x${string}`,
+                            abi: erc20Abi,
+                            functionName: 'approve',
+                            args: [CONTRACTS.unichainSepolia.executor as `0x${string}`, amountRaw]
+                        });
+                        toast.success("Approval Sent", { description: "Waiting for confirmation..." });
+                        // Ideally we wait for receipt here, but let's just proceed or let user click again if it fails
+                        // For better UX, we should wait.
+                        // Simple wait
+                        await new Promise(r => setTimeout(r, 4000));
+                    }
                 }
 
                 // 2. Execute
@@ -640,7 +641,7 @@ export function PoolManager() {
                     address: CONTRACTS.unichainSepolia.executor as `0x${string}`,
                     abi: EXECUTOR_ABI,
                     functionName: 'execute',
-                    args: [key, params, "0x", address!] // '0x' hookData, recipient = user
+                    args: [key, params, "0x", address] // '0x' hookData, recipient = user
                 });
 
                 const shortHash = `${hash.slice(0, 6)}...`;
@@ -663,8 +664,8 @@ export function PoolManager() {
             } // --- END DIRECT MODE ---
 
             // Map Native ETH to WETH for signing (Permit2/Hook requirement)
-            const tokenToSign = (permitToken as string) === "0x0000000000000000000000000000000000000000"
-                ? "0x4200000000000000000000000000000000000006" as `0x${string}` // WETH on Unichain Sepolia
+            const tokenToSign = (permitToken as string) === ETH_ADDR
+                ? WETH_ADDR as `0x${string}` // WETH on Unichain Sepolia
                 : permitToken as `0x${string}`;
 
             const result = await signPermit(
@@ -691,7 +692,7 @@ export function PoolManager() {
                 signature: result.signature,
                 liquidityMode: 'one-sided', // Swaps are inherently one-sided inputs
                 nonce: result.nonce.toString(),
-                provider: address!,
+                provider: address,
                 poolId: poolId,
                 fee: poolConfig.fee,
                 tickSpacing: poolConfig.tickSpacing,
@@ -712,9 +713,10 @@ export function PoolManager() {
             };
             setActivities(prev => [newActivity, ...prev]);
 
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(e);
-            toast.error("Swap Failed", { description: e.shortMessage || e.message });
+            const message = e instanceof Error ? e.message : "Unknown error";
+            toast.error("Swap Failed", { description: message });
         } finally {
             setIsSwapPending(false);
         }
@@ -769,15 +771,6 @@ export function PoolManager() {
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-lg">list</span>
                             ACTIVE POOLS
-                        </div>
-                    </button>
-                    <button
-                        className={`px-4 py-2 rounded-lg font-display tracking-widest text-sm transition-all duration-300 border ${activeTab === 'create' ? 'bg-accent/20 border-accent text-accent' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
-                        onClick={() => setActiveTab('create')}
-                    >
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-lg">add_circle</span>
-                            INITIALIZE
                         </div>
                     </button>
                     <button
@@ -1025,47 +1018,55 @@ export function PoolManager() {
                                             </div>
                                         </div>
 
-                                        {/* Hook Information */}
+                                        {/* Hook Information & Input */}
                                         <div className="relative p-5 rounded-xl border border-primary/20 bg-primary/5 overflow-hidden group">
                                             <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                             <div className="relative z-10 text-center">
                                                 <label className="text-xs font-bold text-primary flex items-center justify-center gap-2 mb-3 font-display tracking-widest uppercase">
                                                     <span className="material-symbols-outlined text-sm">webhook</span>
-                                                    Hook Contract
+                                                    Hook Address
                                                 </label>
-                                                <div className="font-mono text-xs text-text-muted bg-black/40 border border-white/5 p-2 rounded flex items-center justify-center gap-2 hover:text-white transition-colors cursor-copy"
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(poolConfig.hooks);
-                                                        toast.success("Copied Address");
-                                                    }}>
-                                                    {truncateAddress(poolConfig.hooks)}
-                                                    <span className="material-symbols-outlined text-[10px] opacity-50">content_copy</span>
-                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={poolConfig.hooks}
+                                                    onChange={(e) => setPoolConfig({ ...poolConfig, hooks: e.target.value })}
+                                                    className="w-full bg-black/40 border border-white/10 p-2 rounded font-mono text-[10px] text-white focus:border-primary focus:ring-0 outline-none text-center"
+                                                    placeholder="0x..."
+                                                />
                                                 <div className="text-[10px] text-center mt-3 text-primary/60 font-mono">
-                                                    Eidolon Ghost Hook (Points + KYC + TTL)
+                                                    Custom Hook Logic for Uniswap V4
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Fee Tier Display (Now Editable) */}
-                                        <div className="flex justify-between items-center px-2 py-3 border-t border-white/5">
-                                            <span className="text-sm font-mono text-text-muted">Fee Tier</span>
-                                            <select
-                                                className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-xs font-mono text-white outline-none focus:border-primary/50 cursor-pointer appearance-none text-right"
-                                                value={poolConfig.fee}
-                                                onChange={(e) => {
-                                                    const newFee = Number(e.target.value);
-                                                    setPoolConfig({
-                                                        ...poolConfig,
-                                                        fee: newFee,
-                                                        tickSpacing: FEERATE_TO_TICKSPACING[newFee] || 60
-                                                    });
-                                                }}
-                                            >
-                                                <option value={500}>0.05%</option>
-                                                <option value={3000}>0.30%</option>
-                                                <option value={10000}>1.00%</option>
-                                            </select>
+                                        {/* Custom Fee & Tick Spacing Inputs */}
+                                        <div className="grid grid-cols-2 gap-4 border-t border-white/5 pt-5">
+                                            <div>
+                                                <label className="text-[10px] font-mono text-text-muted mb-2 block uppercase tracking-wider">Pool Fee (BPS)</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={poolConfig.fee}
+                                                        onChange={(e) => setPoolConfig({ ...poolConfig, fee: Number(e.target.value) })}
+                                                        className="w-full bg-black/40 border border-white/10 p-3 rounded-xl font-mono text-sm text-white focus:border-primary outline-none"
+                                                        placeholder="3000"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-primary/40 font-bold">BPS</span>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-mono text-text-muted mb-2 block uppercase tracking-wider">Tick Spacing</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        value={poolConfig.tickSpacing}
+                                                        onChange={(e) => setPoolConfig({ ...poolConfig, tickSpacing: Number(e.target.value) })}
+                                                        className="w-full bg-black/40 border border-white/10 p-3 rounded-xl font-mono text-sm text-white focus:border-primary outline-none"
+                                                        placeholder="60"
+                                                    />
+                                                    <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-sm text-primary/40">straighten</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1191,7 +1192,7 @@ export function PoolManager() {
                                             >
                                                 {(zeroForOne ? token0 : token1)?.logo && (
                                                     <Image
-                                                        src={(zeroForOne ? token0 : token1)?.logo!}
+                                                        src={(zeroForOne ? token0 : token1)?.logo as string}
                                                         alt="T"
                                                         width={20}
                                                         height={20}
@@ -1239,7 +1240,7 @@ export function PoolManager() {
                                             >
                                                 {(zeroForOne ? token1 : token0)?.logo && (
                                                     <Image
-                                                        src={(zeroForOne ? token1 : token0)?.logo!}
+                                                        src={(zeroForOne ? token1 : token0)?.logo as string}
                                                         alt="T"
                                                         width={20}
                                                         height={20}
@@ -1334,6 +1335,6 @@ export function PoolManager() {
                     </>
                 )}
             </div>
-        </div >
+        </div>
     );
 }

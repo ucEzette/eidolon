@@ -96,8 +96,8 @@ export class Executor {
         console.log(`⚡ Executor: Preparing settlement for ${order.id}...`);
 
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-        const USDC_ADDRESS = "0x31d0220469e10c4E71834a79b1f276d740d3768F";
-        const WETH_ADDRESS = "0x4200000000000000000000000000000000000006"; // Unichain Sepolia WETH
+        // WETH Address on Unichain Sepolia
+        const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
 
         const normalize = (addr: string) => {
             if (!addr) return ZERO_ADDRESS;
@@ -109,21 +109,19 @@ export class Executor {
                 throw new Error(`Data Contamination: Address "${clean}" is truncated.`);
             }
 
-            // Map ETH to WETH purely for the `permit.currency` field (Permit2 doesn't support ETH)
-            if (clean === "ETH") return WETH_ADDRESS;
-            if (clean === "USDC") return USDC_ADDRESS;
-            if (clean === "WETH") return WETH_ADDRESS;
-            if (clean === "eiETH") return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
-            // Check for explicit 0x0 address string
-            if (clean === ZERO_ADDRESS) return WETH_ADDRESS; // Treat Native as WETH for Token Logic
+            // Map standard symbols/addresses to canonical format
+            const lower = clean.toLowerCase();
+            if (lower === "eth" || lower === ZERO_ADDRESS) return WETH_ADDRESS; // Native -> WETH
+            if (lower === "weth") return WETH_ADDRESS;
 
-            // Case-insensitive check
-            if (clean.toLowerCase() === "eieth") return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
+            // Allow other addresses to pass through
             return clean;
         };
 
         const getDecimals = (addr: string) => {
-            if (addr.toLowerCase() === USDC_ADDRESS.toLowerCase()) return 6;
+            // TODO: Fetch from chain or token list dynamically if possible
+            // For now, simple heuristic for known tokens
+            if (addr.toLowerCase() === "0x31d0220469e10c4e71834a79b1f276d740d3768f") return 6; // USDC
             return 18;
         };
 
@@ -240,8 +238,8 @@ export class Executor {
             const poolKey = {
                 currency0: currency0 as `0x${string}`,
                 currency1: currency1 as `0x${string}`,
-                fee: order.fee || 3000,
-                tickSpacing: order.tickSpacing || 60,
+                fee: order.fee || CONFIG.POOLS.canonical.fee,
+                tickSpacing: order.tickSpacing || CONFIG.POOLS.canonical.tickSpacing,
                 hooks: (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
             };
 
@@ -375,10 +373,20 @@ export class Executor {
             });
             console.log(`   🚀 Transaction Submitted: ${hash}`);
 
-            return hash; // Return the hash
+            // Wait for confirmation
+            console.log("   ⏳ Waiting for transaction receipt...");
+            const receipt = await this.client.waitForTransactionReceipt({ hash });
 
-        } catch (error) {
-            console.error("Executor Failed:", error);
+            if (receipt.status === 'reverted') {
+                console.error(`   ❌ Transaction REVERTED: ${hash}`);
+                return null;
+            }
+
+            console.log(`   ✅ Transaction SUCCESSFUL: ${hash}`);
+            return hash;
+
+        } catch (error: any) {
+            console.error("Executor Failed:", error.message || error);
             return null;
         }
     }

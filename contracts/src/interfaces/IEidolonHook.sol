@@ -57,6 +57,18 @@ interface IEidolonHook {
         uint256 feesEarned
     );
 
+    /// @notice Emitted when liquidity is successfully returned to the provider
+    /// @param provider The provider receiving their funds
+    /// @param poolId The pool being settled
+    /// @param amount The original materialized amount
+    /// @param profit The profit distributed to the provider
+    event LiquiditySettled(
+        address indexed provider,
+        PoolId indexed poolId,
+        uint256 amount,
+        uint256 profit
+    );
+
     /// @notice Emitted when an MEV attack is blocked (Exorcism)
     /// @param poolId The targeted pool
     /// @param attacker The detected attacker address

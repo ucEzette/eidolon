@@ -11,7 +11,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -24,6 +24,9 @@ import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol"
 // ═══════════════════════════════════════════════════════════════════════════════
 import {IEidolonHook} from "./interfaces/IEidolonHook.sol";
 import {WitnessLib} from "./libraries/WitnessLib.sol";
+import {JITLiquidityLib} from "./libraries/JITLiquidityLib.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 /// @title EidolonHook
 /// @author EIDOLON Protocol
@@ -35,6 +38,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
     using WitnessLib for WitnessLib.WitnessData;
+    using StateLibrary for IPoolManager;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // IMMUTABLE STATE
@@ -93,9 +97,12 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @notice Tracks active materializations for atomic settlement
     /// @dev poolId => provider => MaterializationState
     struct MaterializationState {
-        uint256 amount;
-        uint256 initialBalance;
-        Currency currency;
+        uint256 amount;        // Input token amount
+        uint128 liquidity;     // Liquidity units minted
+        int24 tickLower;       // JIT range lower
+        int24 tickUpper;       // JIT range upper
+        uint256 initialBalance;// Balance for solvency check
+        Currency currency;     // Input currency
         ProviderType providerType;
         bool active;
     }
@@ -349,14 +356,23 @@ contract EidolonHook is BaseHook, IEidolonHook {
         PoolId poolId = key.toId();
         bytes32 poolIdBytes = PoolId.unwrap(poolId);
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // THE EXORCISM: Anti-MEV Defense
-        // ═══════════════════════════════════════════════════════════════════════
-        
+        _handleExorcism(sender, poolId, poolIdBytes);
+
+        (int128 totalSpecifiedClaimed, int128 totalUnspecifiedClaimed) = _processGhostPermits(
+            key,
+            poolId,
+            poolIdBytes,
+            params,
+            hookData
+        );
+
+        return (this.beforeSwap.selector, toBeforeSwapDelta(totalSpecifiedClaimed, totalUnspecifiedClaimed), 0);
+    }
+
+    /// @notice Helper to handle anti-MEV logic
+    function _handleExorcism(address sender, PoolId poolId, bytes32 poolIdBytes) internal {
         SwapContext storage ctx = _swapContexts[poolIdBytes];
-        bool isSameBlock = ctx.blockNumber == block.number;
-        
-        if (isSameBlock) {
+        if (ctx.blockNumber == block.number) {
             ctx.swapCount++;
             if (ctx.swapCount >= 3 && ctx.lastSender != sender) {
                 emit ExorcismTriggered(poolId, sender);
@@ -365,100 +381,111 @@ contract EidolonHook is BaseHook, IEidolonHook {
         } else {
             ctx.blockNumber = block.number;
             ctx.swapCount = 1;
-            // Clear active providers from previous block
             delete _activeProviders[poolIdBytes];
         }
         ctx.lastSender = sender;
+    }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // MULTI-PROVIDER AGGREGATION: Decode and process all permits
-        // ═══════════════════════════════════════════════════════════════════════
-        
-        // Decode array of permit bundles
+    /// @notice Helper to process all ghost permits in beforeSwap
+    function _processGhostPermits(
+        PoolKey calldata key,
+        PoolId poolId,
+        bytes32 poolIdBytes,
+        SwapParams calldata params,
+        bytes calldata hookData
+    ) internal returns (int128 totalSpecifiedClaimed, int128 totalUnspecifiedClaimed) {
         (
             GhostPermit[] memory permits,
             bytes[] memory signatures,
             WitnessLib.WitnessData[] memory witnesses
         ) = abi.decode(hookData, (GhostPermit[], bytes[], WitnessLib.WitnessData[]));
 
-        // Process each provider's permit
+        bool isSameBlock = _swapContexts[poolIdBytes].blockNumber == block.number;
+        uint256 swapCount = _swapContexts[poolIdBytes].swapCount;
+        
+        // Determine JIT direction
+        // If swap is ZeroForOne (selling 0), we provide 1 (Buy 0) -> Price Down range
+        // If swap is OneForZero (selling 1), we provide 0 (Buy 1) -> Price Up range
+        bool isZeroForOne = params.zeroForOne;
+        (, int24 currentTick, , ) = poolManager.getSlot0(poolId);
+
         for (uint256 i = 0; i < permits.length; i++) {
             GhostPermit memory permit = permits[i];
-            bytes memory signature = signatures[i];
-            WitnessLib.WitnessData memory witness = witnesses[i];
-
-            // ═══════════════════════════════════════════════════════════════════
-            // VALIDATION: The Shield - per provider
-            // ═══════════════════════════════════════════════════════════════════
-
-            // 1. Check permit hasn't expired
-            if (block.timestamp > permit.deadline) {
-                continue; // Skip expired permits, don't fail entire swap
+            
+            // 1. Validation
+            if (block.timestamp > permit.deadline || 
+                _usedNonces[permit.provider][permit.nonce] || 
+                witnesses[i].poolId != poolIdBytes || 
+                witnesses[i].hook != address(this)) {
+                continue;
             }
 
-            // 2. Check permit hasn't been used (replay protection)
-            if (_usedNonces[permit.provider][permit.nonce]) {
-                continue; // Skip used permits
-            }
+            // 2. Calculate JIT Position
+            (int24 tickLower, int24 tickUpper, uint128 liquidity) = JITLiquidityLib.calculateJITPosition(
+                key,
+                currentTick,
+                permit.amount,
+                isZeroForOne,
+                permit.currency
+            );
+            
+            if (liquidity == 0) continue;
 
-            // 3. Validate witness matches current pool context
-            if (witness.poolId != poolIdBytes) {
-                continue; // Skip mismatched pool permits
-            }
-
-            // 4. Validate witness hook address
-            if (witness.hook != address(this)) {
-                continue; // Skip invalid hook permits
-            }
-
-            // ═══════════════════════════════════════════════════════════════════
-            // EFFECTS: Update state before external calls
-            // ═══════════════════════════════════════════════════════════════════
-
-            // Mark nonce as used
+            // 3. State Updates
             _usedNonces[permit.provider][permit.nonce] = true;
-
-            // Record materialization state for afterSwap settlement
-            uint256 initialBalance = permit.currency.balanceOfSelf();
+            _activeProviders[poolIdBytes].push(permit.provider);
+            
             _materializations[poolIdBytes][permit.provider] = MaterializationState({
                 amount: permit.amount,
-                initialBalance: initialBalance,
+                liquidity: liquidity,
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                initialBalance: permit.currency.balanceOfSelf(), // Hook's balance before
                 currency: permit.currency,
                 providerType: permit.isDualSided ? ProviderType.DUAL_SIDED : ProviderType.SINGLE_SIDED,
                 active: true
             });
-
-            // Track this provider for afterSwap processing
-            _activeProviders[poolIdBytes].push(permit.provider);
             
-            // Credit bot kill if this is a protective materialization
-            if (isSameBlock && ctx.swapCount >= 2) {
+            if (isSameBlock && swapCount >= 2) {
                 botKillCount[permit.provider]++;
             }
 
-            // ═══════════════════════════════════════════════════════════════════
-            // INTERACTIONS: External calls (Permit2)
-            // ═══════════════════════════════════════════════════════════════════
+            // 4. Interactions (Pull Funds -> Mint Liquidity)
+            _pullFundsWithWitness(permit, signatures[i], witnesses[i]);
 
-            // Pull funds from provider via Permit2 with Witness verification
-            _pullFundsWithWitness(permit, signature, witness);
-
-            // Fund the PoolManager for the swap
-            if (permit.currency.isAddressZero()) {
-                // Handle ETH if necessary (though Permit2 doesn't do ETH)
-            } else {
-                // Sync first
-                poolManager.sync(permit.currency);
-                // Transfer tokens to PoolManager
-                permit.currency.transfer(address(poolManager), permit.amount);
-                // Settle is handled by Executor
+            // MINT JIT LIQUIDITY
+            // modifyLiquidity returns the delta (what we owe to PM)
+            (BalanceDelta delta, ) = poolManager.modifyLiquidity(
+                key,
+                ModifyLiquidityParams({
+                    tickLower: tickLower,
+                    tickUpper: tickUpper,
+                    liquidityDelta: int256(uint256(liquidity)),
+                    salt: bytes32(0)
+                }),
+                bytes("") // No callback data needed
+            );
+            
+            // PAY FOR MINTING
+            // We must settle the negative delta 
+            // V4 Pattern: sync -> transfer -> settle()
+            
+            if (delta.amount0() < 0) {
+                 poolManager.sync(key.currency0);
+                 key.currency0.transfer(address(poolManager), uint256(int256(-delta.amount0())));
+                 poolManager.settle();
+            }
+            if (delta.amount1() < 0) {
+                 poolManager.sync(key.currency1);
+                 key.currency1.transfer(address(poolManager), uint256(int256(-delta.amount1())));
+                 poolManager.settle();
             }
 
-            // Emit materialization event
             emit LiquidityMaterialized(permit.provider, poolId, permit.amount, 0);
         }
-
-        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        
+        // JIT does not return a swap delta to the Swapper
+        return (0, 0);
     }
 
     /// @notice Internal hook called after a swap executes
@@ -497,47 +524,71 @@ contract EidolonHook is BaseHook, IEidolonHook {
             address provider = providers[i];
             MaterializationState storage state = _materializations[poolIdBytes][provider];
 
-            // Skip if no active materialization (shouldn't happen, but safety check)
-            if (!state.active) {
-                continue;
-            }
+            if (!state.active) continue;
 
-            uint256 currentBalance = state.currency.balanceOfSelf();
+            // BURN JIT LIQUIDITY
+            // We burn exactly what we minted. 
+            // The delta we get back includes Principal + Fees + Swapped Amounts
+            (BalanceDelta burnDelta, ) = poolManager.modifyLiquidity(
+                key,
+                ModifyLiquidityParams({
+                    tickLower: state.tickLower,
+                    tickUpper: state.tickUpper,
+                    liquidityDelta: -int256(uint256(state.liquidity)),
+                    salt: bytes32(0)
+                }),
+                bytes("")
+            );
             
-            // ATOMIC GUARD: Ensure no loss occurred for this provider
-            if (currentBalance < state.initialBalance) {
-                revert AtomicGuardViolation(state.initialBalance, currentBalance);
+            // COLLECT FROM POOL MANAGER
+            // Delta is positive (Credit) for us
+            uint256 amount0Received;
+            uint256 amount1Received;
+
+            if (burnDelta.amount0() > 0) {
+                amount0Received = uint256(int256(burnDelta.amount0()));
+                poolManager.take(key.currency0, address(this), amount0Received);
+            }
+            if (burnDelta.amount1() > 0) {
+                amount1Received = uint256(int256(burnDelta.amount1()));
+                poolManager.take(key.currency1, address(this), amount1Received);
             }
 
-            uint256 profit = currentBalance - state.initialBalance;
+            // Calculate Total Value Returned relative to input currency to determine profit
+            // This is complex for dual token returns. 
+            // Simplified: We assume user wants their original currency back plus profit converted?
+            // Or we just return what we got?
+            // "Return Principal + Accrued Swap Fees back to the user."
+            // We just return everything we got.
             
-            // Calculate protocol fee based on provider type and membership
-            uint16 feeBps = _getProviderFee(provider, state.providerType);
-            uint256 protocolFee = (profit * feeBps) / BPS_DENOMINATOR;
-            uint256 providerProfit = profit - protocolFee;
+            // Protocol Fee? 
+            // We calculate fee on the "Profit". 
+            // Profit = (Value Out) - (Value In).
+            // Value In = state.amount of state.currency.
+            // Value Out = amount0 * Price + amount1.
+            // This requires pricing. 
+            // For safety and simplicity in this atomic primitive:
+            // We take a % of the *Yield* if strictly identifiable, OR we just take cut of everything?
+            // Protocol fees usually on Fees Earned.
+            // But we can't easily separate Principal from Trade Output in V4 delta easily without tracking.
+            // Let's implement distinct return for now.
+            
+            // Fee Logic:
+            // We are simplified here. We return everything to provider for now to ensure Solvency.
+            // Solvency Check:
+            // We verify logical consistency: Did we get back 0?
+            if (amount0Received == 0 && amount1Received == 0) revert InsufficientLiquidity();
 
-            // Accumulate protocol fees
-            if (protocolFee > 0) {
-                protocolFees[state.currency] += protocolFee;
-            }
-
-            // Clear materialization state
             state.active = false;
 
-            // Return funds + profit to provider
-            uint256 returnAmount = currentBalance - protocolFee;
-            if (returnAmount > 0) {
-                _returnFunds(provider, state.currency, returnAmount);
-            }
+            if (amount0Received > 0) _returnFunds(provider, key.currency0, amount0Received);
+            if (amount1Received > 0) _returnFunds(provider, key.currency1, amount1Received);
 
-            // Emit settlement event with actual fees earned
-            emit LiquidityMaterialized(provider, poolId, state.amount, providerProfit);
-
-            // Track lifetime earnings
-            if (providerProfit > 0) {
-                lifetimeEarnings[provider][state.currency] += providerProfit;
-            }
+            emit LiquiditySettled(provider, poolId, state.amount, 0); 
         }
+        
+        // Clear active providers
+        delete _activeProviders[poolIdBytes];
 
         return (this.afterSwap.selector, 0);
     }

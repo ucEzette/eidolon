@@ -7,7 +7,7 @@ import { useEidolonHook } from "@/hooks/useEidolonHook";
 import { useAccount, useBalance } from "wagmi";
 import { TOKENS, TOKEN_MAP, type Token } from "@/config/tokens";
 import { getPoolId } from "@/utils/uniswap";
-import { CONTRACTS } from "@/config/web3";
+import { CONTRACTS, POOLS } from "@/config/web3";
 import { toast } from "sonner";
 import { type Address } from "viem";
 import Image from "next/image";
@@ -31,6 +31,10 @@ export function SummoningPortal() {
     const [amount, setAmount] = useState<string>("5.0");
     const [amountB, setAmountB] = useState<string>("12500"); // Default for demo
     const [validity, setValidity] = useState<number>(3); // Index 0-3
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [customFee, setCustomFee] = useState<string>("3000"); // Standard 0.3%
+    const [customTickSpacing, setCustomTickSpacing] = useState<string>("200"); // Standard for 0.3%
+    const [customHookAddress, setCustomHookAddress] = useState<string>(CONTRACTS.unichainSepolia.eidolonHook);
 
     // Hooks
     const { signPermit, isPending: isSignPending, error: signError } = useGhostPermit();
@@ -62,8 +66,8 @@ export function SummoningPortal() {
     });
 
     // Approval Logic for WETH
-    const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
-    const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+    const PERMIT2_ADDRESS = CONTRACTS.unichainSepolia.permit2;
+    const WETH_ADDRESS = TOKEN_MAP["WETH"].address;
     const needsApproval = tokenA.address.toLowerCase() === WETH_ADDRESS.toLowerCase();
 
     const { data: allowance, refetch: refetchAllowance } = useReadContract({
@@ -77,9 +81,6 @@ export function SummoningPortal() {
     const { writeContractAsync: approveAsync, isPending: isApprovePending, data: approveHash } = useWriteContract();
 
     // Check if approved amount is sufficient
-    const isApproved = !needsApproval || (allowance && allowance >= parseAbi(["function x()"]).length ? 0n : 1000000000000000000n) || (allowance && allowance > 0n);
-
-    // Correct check:
     const currentAllowance = allowance ?? 0n;
     const requiredAmount = BigInt(parseUnits(amount || "0", 18));
     const hasEnoughAllowance = currentAllowance >= requiredAmount;
@@ -132,34 +133,33 @@ export function SummoningPortal() {
         const signingTokenA = tokenA.address;
         const signingTokenB = tokenB.address;
 
-        // Determine correct Tick Spacing
-        const WETH_ADDR = "0x4200000000000000000000000000000000000006";
-        const EIETH_ADDR = "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
+        let targetTickSpacing = showAdvanced ? parseInt(customTickSpacing) : 60; // Default
+        let targetFee = showAdvanced ? parseInt(customFee) : 100; // Default (0.01%)
+        let targetHook = showAdvanced ? customHookAddress : CONTRACTS.unichainSepolia.eidolonHook;
+
+        const WETH_ADDR = TOKEN_MAP["WETH"].address;
+        const EIETH_ADDR = TOKEN_MAP["eiETH"].address;
 
         const isWeth = signingTokenA.toLowerCase() === WETH_ADDR.toLowerCase() || signingTokenB.toLowerCase() === WETH_ADDR.toLowerCase();
         const isEieth = signingTokenA.toLowerCase() === EIETH_ADDR.toLowerCase() || signingTokenB.toLowerCase() === EIETH_ADDR.toLowerCase();
 
-        let targetTickSpacing = 60; // Default
-        if (isWeth && isEieth) {
-            targetTickSpacing = 60; // Use valid WETH/eiETH pool
+        if (!showAdvanced && isWeth && isEieth) {
+            targetTickSpacing = POOLS.canonical.tickSpacing;
+            targetFee = POOLS.canonical.fee;
         }
 
         // Calculate Pool ID properly (V4)
-        // Note: In a real scenario, we might query the factory to verify the pool exists
-        // V4 requires specifying the VALID fee tier. We use 3000 (0.3%) as the standard pool tier
-        // plus the hook address which makes the key unique.
         const poolId = getPoolId(
-            signingTokenA,
-            signingTokenB,
-            100, // Fee tier (0.01%)
+            signingTokenA as `0x${string}`,
+            signingTokenB as `0x${string}`,
+            targetFee,
             targetTickSpacing,
-            CONTRACTS.unichainSepolia.eidolonHook
+            targetHook as `0x${string}`
         );
 
         console.log("Generated Pool Key ID:", poolId, "Tick:", targetTickSpacing);
 
-        const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
-        const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+        const ZERO_ADDRESS = TOKENS[0].address; // convention
         let permitToken = signingTokenA;
         if (permitToken === ZERO_ADDRESS) permitToken = WETH_ADDRESS;
 
@@ -188,9 +188,9 @@ export function SummoningPortal() {
                     nonce: result.nonce.toString(),
                     provider: address!, // Address is confirmed by isConnected common check
                     poolId: poolId,
-                    fee: 100,
+                    fee: targetFee,
                     tickSpacing: targetTickSpacing,
-                    hookAddress: CONTRACTS.unichainSepolia.eidolonHook
+                    hookAddress: targetHook
 
                 });
                 // Fix Vercel build type error (forced update)
@@ -379,7 +379,7 @@ export function SummoningPortal() {
                     )}
 
                     {/* Validity Slider */}
-                    <div className="p-5 rounded-xl bg-white/5 border border-white/5">
+                    <div className="p-5 rounded-xl bg-white/5 border border-white/5 mb-6">
                         <div className="flex justify-between items-center mb-4">
                             <div className="flex items-center gap-2 text-white/90">
                                 <span className="material-symbols-outlined text-primary text-[20px]">hourglass_top</span>
@@ -417,6 +417,57 @@ export function SummoningPortal() {
                         </div>
                     </div>
 
+                    {/* Advanced Settings Toggle */}
+                    <div className="pt-2">
+                        <button
+                            onClick={() => setShowAdvanced(!showAdvanced)}
+                            className="flex items-center gap-2 text-xs font-mono text-white/40 hover:text-primary transition-colors mb-4 group/toggle"
+                        >
+                            <span className={`material-symbols-outlined text-[16px] transition-transform duration-300 ${showAdvanced ? 'rotate-90' : ''}`}>
+                                settings
+                            </span>
+                            <span>{showAdvanced ? "HIDE ADVANCED CONFIG" : "REVEAL ADVANCED CONFIG"}</span>
+                        </button>
+
+                        {showAdvanced && (
+                            <div className="space-y-4 p-4 mb-4 border border-white/5 bg-white/[0.02] animate-fade-in-up">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-mono text-white/50 mb-1 uppercase tracking-wider">Pool Fee (BPS)</label>
+                                        <input
+                                            type="text"
+                                            value={customFee}
+                                            onChange={(e) => setCustomFee(e.target.value)}
+                                            className="w-full bg-black border border-white/10 p-2 text-sm font-mono text-white focus:border-phantom-cyan focus:ring-0 outline-none"
+                                            placeholder="3000"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-mono text-white/50 mb-1 uppercase tracking-wider">Tick Spacing</label>
+                                        <input
+                                            type="text"
+                                            value={customTickSpacing}
+                                            onChange={(e) => setCustomTickSpacing(e.target.value)}
+                                            className="w-full bg-black border border-white/10 p-2 text-sm font-mono text-white focus:border-phantom-cyan focus:ring-0 outline-none"
+                                            placeholder="200"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-mono text-white/50 mb-1 uppercase tracking-wider">Custom Hook Address</label>
+                                    <input
+                                        type="text"
+                                        value={customHookAddress}
+                                        onChange={(e) => setCustomHookAddress(e.target.value)}
+                                        className="w-full bg-black border border-white/10 p-2 text-sm font-mono text-white focus:border-phantom-cyan focus:ring-0 outline-none"
+                                        placeholder="0x..."
+                                    />
+                                    <p className="text-[9px] text-white/30 mt-1 font-mono italic">Defaults to primary EIDOLON_HOOK if unchanged.</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     {/* Transaction Summary Details */}
                     <div className="border-t border-white/10 pt-5 space-y-3">
                         <div className="flex justify-between items-center text-sm">
@@ -433,41 +484,43 @@ export function SummoningPortal() {
                     </div>
 
                     {/* Action Button */}
-                    {!sufficientAllowance ? (
-                        <button
-                            onClick={handleApprove}
-                            disabled={isApprovePending}
-                            className={`relative w-full group overflow-hidden transition-all duration-100 h-14
-                                bg-amber-400 hover:bg-amber-300 text-black font-bold uppercase tracking-widest shadow-[4px_4px_0px_#fff4] hover:translate-[2px]`}
-                        >
-                            <div className="flex items-center justify-center gap-2">
-                                {isApprovePending ? <span className="material-symbols-outlined animate-spin">refresh</span> : <span className="material-symbols-outlined">verified_user</span>}
-                                {isApprovePending ? "APPROVING PERMIT2..." : "APPROVE WETH (PERMIT2)"}
-                            </div>
-                        </button>
-                    ) : (
-                        <button
-                            onClick={handleSign}
-                            disabled={isSignPending}
-                            className={`relative w-full group overflow-hidden transition-all duration-100 h-14
-                                ${!isConnected
-                                    ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50'
-                                    : 'bg-phantom-cyan hover:bg-phantom-cyan/90 text-black shadow-[4px_4px_0px_#fff4] hover:shadow-[2px_2px_0px_#fff4] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'}`}
-                        >
-                            <div className="flex items-center justify-center gap-2">
-                                {isSignPending ? (
-                                    <span className="material-symbols-outlined animate-spin">refresh</span>
-                                ) : (
-                                    <span className="material-symbols-outlined">
-                                        {!isConnected ? 'wallet' : 'fingerprint'}
+                    <div className="mt-8">
+                        {!sufficientAllowance ? (
+                            <button
+                                onClick={handleApprove}
+                                disabled={isApprovePending}
+                                className={`relative w-full group overflow-hidden transition-all duration-100 h-14
+                                        bg-amber-400 hover:bg-amber-300 text-black font-bold uppercase tracking-widest shadow-[4px_4px_0px_#fff4] hover:translate-[2px]`}
+                            >
+                                <div className="flex items-center justify-center gap-2">
+                                    {isApprovePending ? <span className="material-symbols-outlined animate-spin">refresh</span> : <span className="material-symbols-outlined">verified_user</span>}
+                                    {isApprovePending ? "APPROVING PERMIT2..." : "APPROVE WETH (PERMIT2)"}
+                                </div>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleSign}
+                                disabled={isSignPending}
+                                className={`relative w-full group overflow-hidden transition-all duration-100 h-14
+                                        ${!isConnected
+                                        ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50'
+                                        : 'bg-phantom-cyan hover:bg-phantom-cyan/90 text-black shadow-[4px_4px_0px_#fff4] hover:shadow-[2px_2px_0px_#fff4] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'}`}
+                            >
+                                <div className="flex items-center justify-center gap-2">
+                                    {isSignPending ? (
+                                        <span className="material-symbols-outlined animate-spin">refresh</span>
+                                    ) : (
+                                        <span className="material-symbols-outlined">
+                                            {!isConnected ? 'wallet' : 'fingerprint'}
+                                        </span>
+                                    )}
+                                    <span className="text-base font-bold tracking-widest uppercase">
+                                        {isSignPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
                                     </span>
-                                )}
-                                <span className="text-base font-bold tracking-widest uppercase">
-                                    {isSignPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
-                                </span>
-                            </div>
-                        </button>
-                    )}
+                                </div>
+                            </button>
+                        )}
+                    </div>
 
                     {/* DEBUGGER */}
                     <div className="mt-4 p-2 bg-black/50 text-[10px] font-mono text-gray-500 overflow-hidden break-all border border-white/10 rounded">
