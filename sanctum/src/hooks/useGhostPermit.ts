@@ -106,7 +106,7 @@ export function useGhostPermit() {
             let signature: `0x${string}`;
 
             if (isCircleConnected) {
-                console.log("Signing with Circle Passkey Wallet...");
+
                 // Circle expects the standard object structure
                 const sig = await signTypedDataCircle({
                     domain,

@@ -16,7 +16,7 @@ export function NetworkGuard() {
 
         // Unichain Sepolia ID = 1301
         if (chainId !== unichainSepolia.id) {
-            console.log(`Wrong network detected (${chainId}). Forcing switch to Unichain Sepolia (${unichainSepolia.id})...`);
+
 
             if (switchChain) {
                 try {

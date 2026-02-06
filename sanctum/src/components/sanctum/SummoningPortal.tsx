@@ -1,7 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import { TokenSelector } from "@/components/sanctum/TokenSelector";
+
+const TokenSelector = dynamic(() => import("@/components/sanctum/TokenSelector").then(mod => mod.TokenSelector), {
+    ssr: false,
+    loading: () => null
+});
 import { useGhostPermit } from "@/hooks/useGhostPermit";
 import { useEidolonHook } from "@/hooks/useEidolonHook";
 import { useAccount, useBalance } from "wagmi";
@@ -93,17 +98,7 @@ export function SummoningPortal() {
 
     const sufficientAllowance = !actualNeedsApproval || hasEnoughAllowance;
 
-    console.log("🔍 APPROVAL DEBUG:", {
-        token: tokenA.symbol,
-        tokenAddr: tokenA.address,
-        wethAddr: WETH_ADDRESS,
-        isWETH,
-        allowance: currentAllowance.toString(),
-        required: requiredAmount.toString(),
-        hasEnough: hasEnoughAllowance,
-        sufficient: sufficientAllowance,
-        userAddress: address
-    });
+
 
     const handleApprove = async () => {
         try {
