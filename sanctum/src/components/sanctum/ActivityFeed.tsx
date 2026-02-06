@@ -44,40 +44,7 @@ export function ActivityFeed() {
                     </div>
                 ) : (
                     events.map((event) => (
-                        <div key={event.hash} className="relative overflow-hidden rounded-xl p-3 md:p-4 flex gap-3 md:gap-4 group bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
-                            <div className={`absolute left-0 top-0 bottom-0 w-0.5 md:w-1 bg-cyan-500/50`}></div>
-                            <div className="shrink-0 pt-0.5">
-                                <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center border bg-cyan-500/10 border-cyan-500/20`}>
-                                    <span className={`material-symbols-outlined text-xs md:text-sm text-cyan-400`}>
-                                        check_circle
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start mb-0.5 md:mb-1">
-                                    <h4 className="text-white font-semibold text-xs md:text-sm truncate pr-2 font-display uppercase tracking-tight">{event.type}</h4>
-                                    <span className="text-[8px] md:text-xs text-gray-500 font-mono">
-                                        {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                                <p className="text-gray-400 text-[10px] md:text-xs leading-relaxed mb-2 line-clamp-2">
-                                    {event.description || "Protocol interaction detected."}
-                                </p>
-                                {event.hash && (
-                                    <div className="flex justify-end">
-                                        <a
-                                            href={`https://unichain-sepolia.blockscout.com/tx/${event.hash}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-1 text-[9px] md:text-[11px] text-cyan-400 hover:text-white transition-colors group/link"
-                                        >
-                                            EXPLORER
-                                            <span className="material-symbols-outlined text-[10px] md:text-[12px] group-hover/link:translate-x-0.5 transition-transform">open_in_new</span>
-                                        </a>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <ActivityItem key={event.hash} event={event} />
                     ))
                 )}
             </div>
@@ -87,3 +54,44 @@ export function ActivityFeed() {
         </aside>
     );
 }
+
+const ActivityItem = React.memo(({ event }: { event: any }) => {
+    return (
+        <div className="relative overflow-hidden rounded-xl p-3 md:p-4 flex gap-3 md:gap-4 group bg-white/5 border border-white/5 hover:border-cyan-500/30 transition-all">
+            <div className={`absolute left-0 top-0 bottom-0 w-0.5 md:w-1 bg-cyan-500/50`}></div>
+            <div className="shrink-0 pt-0.5">
+                <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center border bg-cyan-500/10 border-cyan-500/20`}>
+                    <span className={`material-symbols-outlined text-xs md:text-sm text-cyan-400`}>
+                        check_circle
+                    </span>
+                </div>
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start mb-0.5 md:mb-1">
+                    <h4 className="text-white font-semibold text-xs md:text-sm truncate pr-2 font-display uppercase tracking-tight">{event.type}</h4>
+                    <span className="text-[8px] md:text-xs text-gray-500 font-mono">
+                        {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                </div>
+                <p className="text-gray-400 text-[10px] md:text-xs leading-relaxed mb-2 line-clamp-2">
+                    {event.description || "Protocol interaction detected."}
+                </p>
+                {event.hash && (
+                    <div className="flex justify-end">
+                        <a
+                            href={`https://unichain-sepolia.blockscout.com/tx/${event.hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-[9px] md:text-[11px] text-cyan-400 hover:text-white transition-colors group/link"
+                        >
+                            EXPLORER
+                            <span className="material-symbols-outlined text-[10px] md:text-[12px] group-hover/link:translate-x-0.5 transition-transform">open_in_new</span>
+                        </a>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+});
+
+ActivityItem.displayName = 'ActivityItem';

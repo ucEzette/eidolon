@@ -72,7 +72,7 @@ export function useGhostPositions() {
 
         // Sync to Relayer
         try {
-            console.log("Syncing to relayer...", newPosition);
+
             const response = await fetch('/api/relayer/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -82,7 +82,7 @@ export function useGhostPositions() {
             if (!result.success) {
                 console.error("Relayer rejected order:", result.error);
             } else {
-                console.log("Relayer accepted order.");
+
             }
         } catch (e) {
             console.error("Failed to push order to Relayer:", e);

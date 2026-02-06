@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useEidolonHook } from "@/hooks/useEidolonHook";
 import Link from "next/link";
 import { TokenSelector } from "@/components/sanctum/TokenSelector";
@@ -143,7 +143,6 @@ export function MirrorDashboard() {
                 isOpen={showTokenSelector}
                 onClose={() => setShowTokenSelector(false)}
                 onSelect={(token: any) => {
-                    console.log("Selected token:", token);
                     setShowTokenSelector(false);
                 }}
             />
@@ -295,57 +294,9 @@ export function MirrorDashboard() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    activePositions.map((pos) => {
-                                        const timeLeft = Math.max(0, pos.expiry - now);
-                                        const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-                                        const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-                                        const isExpired = timeLeft <= 0;
-                                        const isExpiringSoon = timeLeft < 3 * 60 * 60 * 1000 && !isExpired;
-                                        const isDual = pos.liquidityMode === 'dual-sided';
-
-                                        return (
-                                            <tr key={pos.id} className="group hover:bg-white/[0.02] transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex -space-x-2">
-                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA?.[0]}</div>
-                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB?.[0]}</div>
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-bold text-white flex items-center gap-2">
-                                                                {pos.tokenA}-{pos.tokenB}
-                                                                <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${isDual ? 'text-purple-300 border-purple-500/30 bg-purple-500/10' : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'}`}>
-                                                                    {isDual ? 'Dual' : 'Single'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="text-xs text-slate-500">Unichain Sepolia</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 font-mono text-slate-300">
-                                                    <div className="flex flex-col">
-                                                        <span>{pos.amountA} <span className="text-xs text-slate-500">{pos.tokenA}</span></span>
-                                                        {isDual && <span>{pos.amountB} <span className="text-xs text-slate-500">{pos.tokenB}</span></span>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <div className={`inline-flex items-center gap-1.5 font-mono text-xs ${isExpired ? 'text-red-400' : (isExpiringSoon ? 'text-amber-400' : 'text-emerald-400')}`}>
-                                                        {isExpired ? "Expired" : `${hours}h ${minutes}m`}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-                                                        {isExpired ? "OFFLINE" : "ACTIVE"}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => handleRevokeClick(pos)} className="p-2 text-slate-500 hover:text-red-400 transition-colors">
-                                                        <span className="material-symbols-outlined text-lg">delete</span>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
+                                    activePositions.map((pos) => (
+                                        <PositionRow key={pos.id} pos={pos} now={now} onRevoke={handleRevokeClick} />
+                                    ))
                                 )}
                             </tbody>
                         </table>
@@ -358,53 +309,9 @@ export function MirrorDashboard() {
                                 No active Mirror Positions.
                             </div>
                         ) : (
-                            activePositions.map((pos) => {
-                                const timeLeft = Math.max(0, pos.expiry - now);
-                                const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-                                const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-                                const isExpired = timeLeft <= 0;
-                                const isDual = pos.liquidityMode === 'dual-sided';
-
-                                return (
-                                    <div key={pos.id} className="p-4 flex flex-col gap-4">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-center gap-3">
-                                                <div className="flex -space-x-1.5">
-                                                    <div className="h-7 w-7 rounded-full bg-slate-700 ring-2 ring-[#0a0a0f] flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA?.[0]}</div>
-                                                    <div className="h-7 w-7 rounded-full bg-slate-700 ring-2 ring-[#0a0a0f] flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB?.[0]}</div>
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-white">{pos.tokenA}-{pos.tokenB}</div>
-                                                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">{isDual ? 'Dual Sided' : 'Single Sided'}</div>
-                                                </div>
-                                            </div>
-                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-                                                {isExpired ? 'OFFLINE' : 'ACTIVE'}
-                                            </span>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4 bg-white/5 rounded-lg p-3">
-                                            <div>
-                                                <div className="text-[10px] text-slate-500 uppercase mb-1">Liquidity</div>
-                                                <div className="text-xs font-mono text-white truncate">{pos.amountA} {pos.tokenA}</div>
-                                                {isDual && <div className="text-xs font-mono text-white truncate">{pos.amountB} {pos.tokenB}</div>}
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] text-slate-500 uppercase mb-1">Expires In</div>
-                                                <div className={`text-xs font-mono font-bold ${isExpired ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                    {isExpired ? 'Now' : `${hours}h ${minutes}m`}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => handleRevokeClick(pos)}
-                                            className="w-full py-2.5 rounded-lg border border-red-500/20 bg-red-500/5 text-red-400 font-bold text-xs flex items-center justify-center gap-2 active:bg-red-500/20 transition-all"
-                                        >
-                                            <span className="material-symbols-outlined text-sm">delete</span>
-                                            REVOKE PERMIT
-                                        </button>
-                                    </div>
-                                );
-                            })
+                            activePositions.map((pos) => (
+                                <PositionCard key={pos.id} pos={pos} now={now} onRevoke={handleRevokeClick} />
+                            ))
                         )}
                     </div>
                 </div>
@@ -487,3 +394,107 @@ export function MirrorDashboard() {
         </div>
     );
 }
+
+const PositionRow = React.memo(({ pos, now, onRevoke }: { pos: any, now: number, onRevoke: (pos: any) => void }) => {
+    const timeLeft = Math.max(0, pos.expiry - now);
+    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    const isExpired = timeLeft <= 0;
+    const isExpiringSoon = timeLeft < 3 * 60 * 60 * 1000 && !isExpired;
+    const isDual = pos.liquidityMode === 'dual-sided';
+
+    return (
+        <tr className="group hover:bg-white/[0.02] transition-colors">
+            <td className="px-6 py-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-2">
+                        <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA?.[0]}</div>
+                        <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB?.[0]}</div>
+                    </div>
+                    <div>
+                        <div className="font-bold text-white flex items-center gap-2">
+                            {pos.tokenA}-{pos.tokenB}
+                            <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${isDual ? 'text-purple-300 border-purple-500/30 bg-purple-500/10' : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'}`}>
+                                {isDual ? 'Dual' : 'Single'}
+                            </span>
+                        </div>
+                        <div className="text-xs text-slate-500">Unichain Sepolia</div>
+                    </div>
+                </div>
+            </td>
+            <td className="px-6 py-4 font-mono text-slate-300">
+                <div className="flex flex-col">
+                    <span>{pos.amountA} <span className="text-xs text-slate-500">{pos.tokenA}</span></span>
+                    {isDual && <span>{pos.amountB} <span className="text-xs text-slate-500">{pos.tokenB}</span></span>}
+                </div>
+            </td>
+            <td className="px-6 py-4 text-center">
+                <div className={`inline-flex items-center gap-1.5 font-mono text-xs ${isExpired ? 'text-red-400' : (isExpiringSoon ? 'text-amber-400' : 'text-emerald-400')}`}>
+                    {isExpired ? "Expired" : `${hours}h ${minutes}m`}
+                </div>
+            </td>
+            <td className="px-6 py-4 text-center">
+                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                    {isExpired ? "OFFLINE" : "ACTIVE"}
+                </span>
+            </td>
+            <td className="px-6 py-4 text-right">
+                <button onClick={() => onRevoke(pos)} className="p-2 text-slate-500 hover:text-red-400 transition-colors">
+                    <span className="material-symbols-outlined text-lg">delete</span>
+                </button>
+            </td>
+        </tr>
+    );
+});
+
+PositionRow.displayName = 'PositionRow';
+
+const PositionCard = React.memo(({ pos, now, onRevoke }: { pos: any, now: number, onRevoke: (pos: any) => void }) => {
+    const timeLeft = Math.max(0, pos.expiry - now);
+    const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+    const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+    const isExpired = timeLeft <= 0;
+    const isDual = pos.liquidityMode === 'dual-sided';
+
+    return (
+        <div className="p-4 flex flex-col gap-4">
+            <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                    <div className="flex -space-x-1.5">
+                        <div className="h-7 w-7 rounded-full bg-slate-700 ring-2 ring-[#0a0a0f] flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA?.[0]}</div>
+                        <div className="h-7 w-7 rounded-full bg-slate-700 ring-2 ring-[#0a0a0f] flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB?.[0]}</div>
+                    </div>
+                    <div>
+                        <div className="text-sm font-bold text-white">{pos.tokenA}-{pos.tokenB}</div>
+                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">{isDual ? 'Dual Sided' : 'Single Sided'}</div>
+                    </div>
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                    {isExpired ? 'OFFLINE' : 'ACTIVE'}
+                </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 bg-white/5 rounded-lg p-3">
+                <div>
+                    <div className="text-[10px] text-slate-500 uppercase mb-1">Liquidity</div>
+                    <div className="text-xs font-mono text-white truncate">{pos.amountA} {pos.tokenA}</div>
+                    {isDual && <div className="text-xs font-mono text-white truncate">{pos.amountB} {pos.tokenB}</div>}
+                </div>
+                <div className="text-right">
+                    <div className="text-[10px] text-slate-500 uppercase mb-1">Expires In</div>
+                    <div className={`text-xs font-mono font-bold ${isExpired ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {isExpired ? 'Now' : `${hours}h ${minutes}m`}
+                    </div>
+                </div>
+            </div>
+            <button
+                onClick={() => onRevoke(pos)}
+                className="w-full py-2.5 rounded-lg border border-red-500/20 bg-red-500/5 text-red-400 font-bold text-xs flex items-center justify-center gap-2 active:bg-red-500/20 transition-all"
+            >
+                <span className="material-symbols-outlined text-sm">delete</span>
+                REVOKE PERMIT
+            </button>
+        </div>
+    );
+});
+
+PositionCard.displayName = 'PositionCard';

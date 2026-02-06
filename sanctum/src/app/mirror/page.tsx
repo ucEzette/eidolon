@@ -1,8 +1,13 @@
 "use client";
 
+import nextDynamic from "next/dynamic";
 import { Navbar } from "@/components/sanctum/Navbar";
 import { MirrorDashboard } from "@/components/sanctum/MirrorDashboard";
-import { ActivityFeed } from "@/components/sanctum/ActivityFeed";
+
+const ActivityFeed = nextDynamic(() => import("@/components/sanctum/ActivityFeed").then(mod => mod.ActivityFeed), {
+    ssr: false,
+    loading: () => <div className="animate-pulse bg-white/5 rounded-xl h-full w-full" />
+});
 
 // Force client-side rendering to avoid SSR issues with wagmi/viem
 export const dynamic = "force-dynamic";
