@@ -68,6 +68,13 @@ const OFFICIAL_POOL_KEYS = [
         fee: 3000,
         tickSpacing: 60,
         hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
+    },
+    {
+        token0: "0x4200000000000000000000000000000000000006", // WETH
+        token1: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // eiETH
+        fee: 3000,
+        tickSpacing: 200, // Valid WETH Pool
+        hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
     }
 ];
 
@@ -100,10 +107,21 @@ export function PoolManager() {
     const [poolConfig, setPoolConfig] = useState({
         token0: "0x0000000000000000000000000000000000000000", // ETH (Native)
         token1: "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        fee: 3000, // 0.3% Fee (Updated Default)
+        fee: 100, // 0.01% Fee (Updated Default)
         tickSpacing: 60, // 60 Ticks
         hooks: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8"
     });
+
+    // Auto-Set Tick Spacing for WETH/eiETH to 200
+    useEffect(() => {
+        const isWeth = poolConfig.token0.toLowerCase() === "0x4200000000000000000000000000000000000006".toLowerCase();
+        const isEieth = poolConfig.token1.toLowerCase() === "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6".toLowerCase();
+
+        if (isWeth && isEieth && poolConfig.tickSpacing !== 60) {
+            console.log("Auto-switching WETH/eiETH to Tick 60 (Valid Pool)");
+            setPoolConfig(prev => ({ ...prev, tickSpacing: 60 }));
+        }
+    }, [poolConfig.token0, poolConfig.token1]);
 
     // Network Check & Auto-Switch
     const isWrongNetwork = chainId !== unichainSepolia.id;
@@ -144,7 +162,7 @@ export function PoolManager() {
         ));
     }, [poolVariants]);
 
-    // Batch fetch state for all variants
+    // Batch fetch state for all variants (Using extsload at Slot 6 because getSlot0 is broken)
     const { data: variantStates } = useReadContract({
         address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
         abi: POOL_MANAGER_ABI,
@@ -236,7 +254,7 @@ export function PoolManager() {
     const decimals0 = poolConfig.token0 === "0x0000000000000000000000000000000000000000" ? 18 : (tokenMetadata?.[0]?.result as number || 18);
     const decimals1 = poolConfig.token1 === "0x0000000000000000000000000000000000000000" ? 18 : (tokenMetadata?.[1]?.result as number || 18);
 
-    // 4. Read Pool State (Slot0) for Active Pool
+    // 4. Read Pool State using extsload (Slot 6) because getSlot0 is broken
     const poolStateSlot = useMemo(() => {
         return getPoolStateSlot(poolId);
     }, [poolId]);
@@ -249,13 +267,14 @@ export function PoolManager() {
         chainId: unichainSepolia.id, // Explicitly query correct chain
         query: {
             enabled: !!poolStateSlot && !isWrongNetwork,
-            refetchInterval: 5000
+            refetchInterval: 5000,
+            retry: false
         }
     });
 
     const isPoolInitialized = useMemo(() => {
         if (!poolStateData) return false;
-        return hexToBigInt(poolStateData) !== 0n;
+        return hexToBigInt(poolStateData as any) !== 0n;
     }, [poolStateData]);
 
     // Local Storage for User-Imported Pools & Activity
@@ -318,8 +337,22 @@ export function PoolManager() {
     const estimatedOutput = useMemo(() => {
         if (!swapAmount || isNaN(Number(swapAmount))) return null;
 
-        // Log everything for debugging
         const hasGridPool = !!poolStateData;
+
+        // Parse `extsload` data:
+        // Value is a hex string (bytes32). 
+        // Slot0 structure: [tick (24)][protocolFee (24)][lpFee (24)][sqrtPriceX96 (160)]
+        // Lowest 160 bits are sqrtPriceX96.
+        // extsload returns a single value if array length 1? No, logic above sends [slot], returns value.
+        // Wait, ABI: `function extsload(bytes32 slot) external view returns (bytes32 value)`
+        // useReadContract return type depends on ABI.
+
+        let sqrtPriceX96 = 0n;
+        if (poolStateData) {
+            const val = hexToBigInt(poolStateData as `0x${string}`);
+            sqrtPriceX96 = val & ((1n << 160n) - 1n);
+        }
+
         console.log("EstimatedOutput DEBUG: Start", {
             poolStateData,
             hasGridPool,
@@ -327,18 +360,15 @@ export function PoolManager() {
             swapAmount,
             decimals0,
             decimals1,
-            manualPrice: price
+            manualPrice: price,
+            parsedSqrtPrice: sqrtPriceX96.toString()
         });
 
-        const val = BigInt(!poolStateData ? 0 : poolStateData as string);
-        let sqrtPriceX96 = val & ((1n << 160n) - 1n);
 
         console.log("EstimatedOutput DEBUG: Initial sqrtPriceX96", sqrtPriceX96.toString());
 
         // HYBRID QUOTER LOGIC:
-        // If On-Chain is 0 (or close to MIN_SQRT_PRICE), check Ghost Liquidity OR if we have a manually set Price
-        // 1n << 64n is a safe lower bound for reasonable prices (approx 10^-10)
-        // The debug log showed 4295128740 which is ~2^32 (MIN_SQRT_PRICE)
+        // If On-Chain is 0, check Ghost Liquidity OR if we have a manually set Price
         const isEffectivelyZero = sqrtPriceX96 < (1n << 64n);
 
         if (isEffectivelyZero) {

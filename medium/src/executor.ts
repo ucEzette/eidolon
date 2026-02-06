@@ -9,6 +9,7 @@ import {
     encodeFunctionData,
     encodeAbiParameters,
     verifyTypedData,
+    keccak256,
     Hex
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -50,6 +51,19 @@ const EXECUTOR_ABI = [
             { name: 'amount0', type: 'int256' },
             { name: 'amount1', type: 'int256' }
         ]
+    },
+    {
+        type: 'error',
+        name: 'PriceLimitAlreadyExceeded',
+        inputs: [
+            { name: 'currentPrice', type: 'uint160' },
+            { name: 'limitPrice', type: 'uint160' }
+        ]
+    },
+    {
+        type: 'error',
+        name: 'PoolNotInitialized',
+        inputs: []
     }
 ];
 
@@ -177,10 +191,6 @@ export class Executor {
             }
 
             // 2. Encode Permit Data
-            // We need to match the decode in Hook._beforeSwap:
-            // (GhostPermit[], bytes[], WitnessLib.WitnessData[])
-
-            // Reconstruct the permit struct
             const permit = {
                 provider: order.provider as `0x${string}`,
                 currency: tokenA as `0x${string}`,
@@ -224,24 +234,124 @@ export class Executor {
             );
 
             // 3. Prepare PoolKey
-            // Sort tokens to determine Currency0/1
             const currency0 = tokenA.toLowerCase() < tokenB.toLowerCase() ? tokenA : tokenB;
             const currency1 = tokenA.toLowerCase() < tokenB.toLowerCase() ? tokenB : tokenA;
 
             const poolKey = {
                 currency0: currency0 as `0x${string}`,
                 currency1: currency1 as `0x${string}`,
-                fee: order.fee || 3000, // Default to 0.3%
-                tickSpacing: order.tickSpacing || 60, // Default to 60
+                fee: order.fee || 3000,
+                tickSpacing: order.tickSpacing || 60,
                 hooks: (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
             };
 
-            // 4. Prepare Swap Params for Executor
-            // Determine swap direction: selling tokenA
+            // 4. Prepare Swap Params
             const zeroForOne = tokenA.toLowerCase() === currency0.toLowerCase();
-            const amountSpecified = -parseUnits(order.amountA.toString(), decimalsA); // Negative = Exact Input
+            const amountSpecified = -parseUnits(order.amountA.toString(), decimalsA);
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
+
+            // 5. Verify Pool State & Calculate Dynamic Price Limit
+            const poolId = order.poolId as `0x${string}`;
+            console.log(`   🌊 Checking Pool State for ID: ${poolId}`);
+
+            // by initializing it before the `if` checks in the ReplacementContent 
+            // and carrying it through.
+
+            // Correction: The `try` block ends at line 304. The `args` usage is at line 322.
+            // If I define `limitX96` inside `try`, it won't be visible at `args`.
+            // So I must hoist the variable declaration.
+
+            // Let's modify the plan: 
+            // 1. Initialize `let limitX96 = zeroForOne ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n;` BEFORE the try.
+            // 2. Update it inside the try.
+            // 3. Use it in args.
+
+            // BUT, valid replacement must match exact lines.
+            // I will replace from `try {` (line 263) down to `args: [` (line 316).
+            // That is a large chunk but safe.
+
+            // Actually, I'll just replace the `try/catch` block and the `const hash = ...` block together.
+
+            // Let's refine the replacement to be robust.
+
+            let limitX96 = zeroForOne ? 4295128740n : 1461446703485210103287273052203988822378723970341n; // Default Fallback
+
+            try {
+                // ---------------------------------------------------------
+                // FIX: Use extsload (Slot 6) because getSlot0 is broken
+                // ---------------------------------------------------------
+
+                // Calculate Storage Slot for _pools[poolId].slot0
+                // Mapping is at slot 6
+                const MAPPING_SLOT = 6n;
+                const mappingKey = encodeAbiParameters(
+                    [{ name: 'key', type: 'bytes32' }, { name: 'slot', type: 'uint256' }],
+                    [poolId, MAPPING_SLOT]
+                );
+                const storageSlot = keccak256(mappingKey);
+                console.log(`   🔍 Debug Storage Slot: ${storageSlot}`);
+                console.log(`   🔍 Debug Pool ID: ${poolId}`);
+
+                const slotData = await this.client.readContract({
+                    address: CONFIG.CONTRACTS.POOL_MANAGER as `0x${string}`,
+                    abi: [
+                        {
+                            name: 'extsload',
+                            type: 'function',
+                            stateMutability: 'view',
+                            inputs: [{ name: 'slot', type: 'bytes32' }],
+                            outputs: [{ name: 'value', type: 'bytes32' }]
+                        }
+                    ],
+                    functionName: 'extsload',
+                    args: [storageSlot]
+                }) as `0x${string}`;
+                console.log(`   🔍 Debug Raw Slot Data: ${slotData}`);
+
+                const val = BigInt(slotData);
+                const price = val & ((1n << 160n) - 1n);
+                // Tick extraction: (val >> 160) & 0xFFFFFF (24 bits)
+                // Handle signed 24-bit integer manually if needed, but for display/logic unsigned verification is mostly okay
+                // For completeness:
+                let tick = Number((val >> 160n) & ((1n << 24n) - 1n));
+                if (tick & 0x800000) tick -= 0x1000000; // Sign extension for 24-bit
+
+                console.log(`   📊 Pool Price (via extsload): ${price.toString()}, Tick: ${tick}`);
+
+                if (price === 0n) {
+                    console.error("❌ CRITICAL: Pool is NOT INITIALIZED (Price=0). Swap will fail.");
+                    return null;
+                }
+
+                const MIN_SQRT_PRICE = 4295128739n;
+                const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n;
+
+                if (zeroForOne && price <= MIN_SQRT_PRICE + 100n) {
+                    console.error("❌ CRITICAL: Pool Price at MINIMUM. Liquidity likely empty/drained.");
+                    return null;
+                }
+                if (!zeroForOne && price >= MAX_SQRT_PRICE - 100n) {
+                    console.error("❌ CRITICAL: Pool Price at MAXIMUM. Liquidity likely empty/drained.");
+                    return null;
+                }
+
+                // DYNAMIC SLIPPAGE
+                // 20% Slippage Tolerance to prevent 0x7c9c6e8f
+                if (zeroForOne) {
+                    limitX96 = (price * 8n) / 10n; // Target 80% of current price
+                    if (limitX96 <= MIN_SQRT_PRICE) limitX96 = MIN_SQRT_PRICE + 1n;
+                } else {
+                    limitX96 = (price * 12n) / 10n; // Target 120% of current price
+                    if (limitX96 >= MAX_SQRT_PRICE) limitX96 = MAX_SQRT_PRICE - 1n;
+                }
+                console.log(`   🛡️ Dynamic Limit Applied: ${limitX96.toString()}`);
+
+            } catch (err) {
+                console.error("⚠️  Pool State Check Failed:", err);
+                return null; // Safety: Do not trade blindly
+            }
+
             console.log("   📝 Transaction Data Encoded.");
             console.log("   HookData Length:", hookData.length);
             console.log(`   🔄 Swap Direction: ${zeroForOne ? "ZeroForOne" : "OneForZero"} (Selling ${tokenA})`);
@@ -257,7 +367,7 @@ export class Executor {
                     {
                         zeroForOne,
                         amountSpecified: BigInt(amountSpecified),
-                        sqrtPriceLimitX96: zeroForOne ? 4295128740n : 1461446703485210103287273052203988822378723970341n
+                        sqrtPriceLimitX96: limitX96
                     },
                     hookData,
                     order.provider as `0x${string}` // recipient

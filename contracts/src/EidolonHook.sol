@@ -290,7 +290,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @dev Enables beforeSwap and afterSwap hooks
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
-            beforeInitialize: false,
+            beforeInitialize: true,        // ✓ Enable to allow initialization even if flag collision occurs
             afterInitialize: false,
             beforeAddLiquidity: false,
             afterAddLiquidity: false,
@@ -311,6 +311,19 @@ contract EidolonHook is BaseHook, IEidolonHook {
     // HOOK CALLBACKS (Override internal virtual functions from BaseHook)
     // ═══════════════════════════════════════════════════════════════════════════
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // INITIALIZATION HOOKS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice No-op hook to allow initialization
+    function _beforeInitialize(
+        address,
+        PoolKey calldata,
+        uint160
+    ) internal override returns (bytes4) {
+        return this.beforeInitialize.selector;
+    }
+
     /// @notice Internal hook called before a swap executes
     /// @dev Validates Ghost Permit(s) and materializes JIT liquidity
     ///      Supports MULTI-PROVIDER aggregation: hookData can contain multiple permits
@@ -327,6 +340,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
         SwapParams calldata params,
         bytes calldata hookData
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+
         // If no hookData provided, this is a normal swap - don't interfere
         if (hookData.length == 0) {
             return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);

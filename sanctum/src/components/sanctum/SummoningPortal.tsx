@@ -14,6 +14,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useGhostPositions } from "@/hooks/useGhostPositions";
 import { useCircleWallet } from "@/components/providers/CircleWalletProvider";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { parseAbi, maxUint256, parseUnits } from "viem";
 
 type LiquidityMode = 'one-sided' | 'dual-sided';
 
@@ -59,6 +61,64 @@ export function SummoningPortal() {
         token: tokenB.isNative ? undefined : tokenB.address,
     });
 
+    // Approval Logic for WETH
+    const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+    const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+    const needsApproval = tokenA.address.toLowerCase() === WETH_ADDRESS.toLowerCase();
+
+    const { data: allowance, refetch: refetchAllowance } = useReadContract({
+        address: tokenA.address as `0x${string}`,
+        abi: parseAbi(["function allowance(address, address) view returns (uint256)"]),
+        functionName: "allowance",
+        args: [address as `0x${string}`, PERMIT2_ADDRESS],
+        query: { enabled: !!address && needsApproval }
+    });
+
+    const { writeContractAsync: approveAsync, isPending: isApprovePending, data: approveHash } = useWriteContract();
+
+    // Check if approved amount is sufficient
+    const isApproved = !needsApproval || (allowance && allowance >= parseAbi(["function x()"]).length ? 0n : 1000000000000000000n) || (allowance && allowance > 0n);
+
+    // Correct check:
+    const currentAllowance = allowance ?? 0n;
+    const requiredAmount = BigInt(parseUnits(amount || "0", 18));
+    const hasEnoughAllowance = currentAllowance >= requiredAmount;
+
+    // Backup check using Symbol
+    const isWETH = tokenA.symbol === "WETH" || tokenA.address.toLowerCase() === WETH_ADDRESS.toLowerCase();
+
+    // Force needsApproval if symbol is WETH
+    const actualNeedsApproval = isWETH;
+
+    const sufficientAllowance = !actualNeedsApproval || hasEnoughAllowance;
+
+    console.log("🔍 APPROVAL DEBUG:", {
+        token: tokenA.symbol,
+        tokenAddr: tokenA.address,
+        wethAddr: WETH_ADDRESS,
+        isWETH,
+        allowance: currentAllowance.toString(),
+        required: requiredAmount.toString(),
+        hasEnough: hasEnoughAllowance,
+        sufficient: sufficientAllowance,
+        userAddress: address
+    });
+
+    const handleApprove = async () => {
+        try {
+            await approveAsync({
+                address: tokenA.address as `0x${string}`,
+                abi: parseAbi(["function approve(address spender, uint256 amount) returns (bool)"]),
+                functionName: "approve",
+                args: [PERMIT2_ADDRESS, maxUint256]
+            });
+            toast.success("Approval Submitted", { description: "Waiting for confirmation..." });
+            // Ideally wait for receipt here or let UI update automatically via refetch
+        } catch (e: any) {
+            toast.error("Approval Failed", { description: e.message });
+        }
+    };
+
 
 
     const handleSign = async () => {
@@ -72,6 +132,18 @@ export function SummoningPortal() {
         const signingTokenA = tokenA.address;
         const signingTokenB = tokenB.address;
 
+        // Determine correct Tick Spacing
+        const WETH_ADDR = "0x4200000000000000000000000000000000000006";
+        const EIETH_ADDR = "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
+
+        const isWeth = signingTokenA.toLowerCase() === WETH_ADDR.toLowerCase() || signingTokenB.toLowerCase() === WETH_ADDR.toLowerCase();
+        const isEieth = signingTokenA.toLowerCase() === EIETH_ADDR.toLowerCase() || signingTokenB.toLowerCase() === EIETH_ADDR.toLowerCase();
+
+        let targetTickSpacing = 60; // Default
+        if (isWeth && isEieth) {
+            targetTickSpacing = 60; // Use valid WETH/eiETH pool
+        }
+
         // Calculate Pool ID properly (V4)
         // Note: In a real scenario, we might query the factory to verify the pool exists
         // V4 requires specifying the VALID fee tier. We use 3000 (0.3%) as the standard pool tier
@@ -79,12 +151,12 @@ export function SummoningPortal() {
         const poolId = getPoolId(
             signingTokenA,
             signingTokenB,
-            3000, // Fee tier (0.3%)
-            60,   // Tick spacing
+            100, // Fee tier (0.01%)
+            targetTickSpacing,
             CONTRACTS.unichainSepolia.eidolonHook
         );
 
-        console.log("Generated Pool Key ID:", poolId);
+        console.log("Generated Pool Key ID:", poolId, "Tick:", targetTickSpacing);
 
         const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -116,9 +188,10 @@ export function SummoningPortal() {
                     nonce: result.nonce.toString(),
                     provider: address!, // Address is confirmed by isConnected common check
                     poolId: poolId,
-                    fee: 3000,
-                    tickSpacing: 60,
+                    fee: 100,
+                    tickSpacing: targetTickSpacing,
                     hookAddress: CONTRACTS.unichainSepolia.eidolonHook
+
                 });
                 // Fix Vercel build type error (forced update)
 
@@ -360,27 +433,52 @@ export function SummoningPortal() {
                     </div>
 
                     {/* Action Button */}
-                    <button
-                        onClick={handleSign}
-                        disabled={isSignPending}
-                        className={`relative w-full group overflow-hidden transition-all duration-100 h-14
-                            ${!isConnected
-                                ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50'
-                                : 'bg-phantom-cyan hover:bg-phantom-cyan/90 text-black shadow-[4px_4px_0px_#fff4] hover:shadow-[2px_2px_0px_#fff4] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'}`}
-                    >
-                        <div className="flex items-center justify-center gap-2">
-                            {isSignPending ? (
-                                <span className="material-symbols-outlined animate-spin">refresh</span>
-                            ) : (
-                                <span className="material-symbols-outlined">
-                                    {!isConnected ? 'wallet' : 'fingerprint'}
+                    {!sufficientAllowance ? (
+                        <button
+                            onClick={handleApprove}
+                            disabled={isApprovePending}
+                            className={`relative w-full group overflow-hidden transition-all duration-100 h-14
+                                bg-amber-400 hover:bg-amber-300 text-black font-bold uppercase tracking-widest shadow-[4px_4px_0px_#fff4] hover:translate-[2px]`}
+                        >
+                            <div className="flex items-center justify-center gap-2">
+                                {isApprovePending ? <span className="material-symbols-outlined animate-spin">refresh</span> : <span className="material-symbols-outlined">verified_user</span>}
+                                {isApprovePending ? "APPROVING PERMIT2..." : "APPROVE WETH (PERMIT2)"}
+                            </div>
+                        </button>
+                    ) : (
+                        <button
+                            onClick={handleSign}
+                            disabled={isSignPending}
+                            className={`relative w-full group overflow-hidden transition-all duration-100 h-14
+                                ${!isConnected
+                                    ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white/50'
+                                    : 'bg-phantom-cyan hover:bg-phantom-cyan/90 text-black shadow-[4px_4px_0px_#fff4] hover:shadow-[2px_2px_0px_#fff4] hover:translate-x-[2px] hover:translate-y-[2px] active:shadow-none active:translate-x-[4px] active:translate-y-[4px]'}`}
+                        >
+                            <div className="flex items-center justify-center gap-2">
+                                {isSignPending ? (
+                                    <span className="material-symbols-outlined animate-spin">refresh</span>
+                                ) : (
+                                    <span className="material-symbols-outlined">
+                                        {!isConnected ? 'wallet' : 'fingerprint'}
+                                    </span>
+                                )}
+                                <span className="text-base font-bold tracking-widest uppercase">
+                                    {isSignPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
                                 </span>
-                            )}
-                            <span className="text-base font-bold tracking-widest uppercase">
-                                {isSignPending ? 'SUMMONING...' : (!isConnected ? 'CONNECT WALLET' : 'SUMMON GHOST PERMIT')}
-                            </span>
-                        </div>
-                    </button>
+                            </div>
+                        </button>
+                    )}
+
+                    {/* DEBUGGER */}
+                    <div className="mt-4 p-2 bg-black/50 text-[10px] font-mono text-gray-500 overflow-hidden break-all border border-white/10 rounded">
+                        <p>DEBUG INFO:</p>
+                        <p>Token: {tokenA.symbol}</p>
+                        <p>Address: {tokenA.address}</p>
+                        <p>WETH_ADDR: {WETH_ADDRESS}</p>
+                        <p>IsWETH: {isWETH ? "TRUE" : "FALSE"}</p>
+                        <p>Allowance: {currentAllowance.toString()} / {requiredAmount.toString()}</p>
+                        <p>Sufficient: {sufficientAllowance ? "TRUE" : "FALSE"}</p>
+                    </div>
                 </div>
             </div>
 
