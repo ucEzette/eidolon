@@ -109,19 +109,37 @@ export class Executor {
                 throw new Error(`Data Contamination: Address "${clean}" is truncated.`);
             }
 
-            // Map standard symbols/addresses to canonical format
+            // 1. Check for symbol resolution (e.g. "eiETH", "ETH")
+            // Handle case-insensitivity by checking values in the map
+            const tokenSymbol = clean;
+            const tokenEntry = Object.entries(CONFIG.TOKENS).find(
+                ([symbol]) => symbol.toLowerCase() === tokenSymbol.toLowerCase()
+            );
+
+            if (tokenEntry) {
+                const resolved = tokenEntry[1].address;
+                return (resolved === ZERO_ADDRESS ? WETH_ADDRESS : resolved) as `0x${string}`;
+            }
+
+            // 2. Map standard variants
             const lower = clean.toLowerCase();
-            if (lower === "eth" || lower === ZERO_ADDRESS) return WETH_ADDRESS; // Native -> WETH
+            if (lower === "eth" || lower === ZERO_ADDRESS) return WETH_ADDRESS;
             if (lower === "weth") return WETH_ADDRESS;
 
-            // Allow other addresses to pass through
-            return clean;
+            // 3. Fallback: Allow direct hex addresses
+            return clean as `0x${string}`;
         };
 
         const getDecimals = (addr: string) => {
-            // TODO: Fetch from chain or token list dynamically if possible
-            // For now, simple heuristic for known tokens
-            if (addr.toLowerCase() === "0x31d0220469e10c4e71834a79b1f276d740d3768f") return 6; // USDC
+            const lowerAddr = addr.toLowerCase();
+            // Check TOKENS map by address
+            const token = Object.values(CONFIG.TOKENS).find(
+                t => t.address.toLowerCase() === lowerAddr
+            );
+            if (token) return token.decimals;
+
+            // Fallback heuristics
+            if (lowerAddr === "0x31d0220469e10c4e71834a79b1f276d740d3768f") return 6; // USDC
             return 18;
         };
 

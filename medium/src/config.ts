@@ -14,7 +14,13 @@ export const CONFIG = {
             fee: 3000,
             tickSpacing: 200,
         }
-    }
+    },
+    TOKENS: {
+        "ETH": { address: "0x0000000000000000000000000000000000000000", decimals: 18 },
+        "WETH": { address: "0x4200000000000000000000000000000000000006", decimals: 18 },
+        "USDC": { address: "0x31d0220469e10c4E71834a79b1f276d740d3768F", decimals: 6 },
+        "eiETH": { address: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", decimals: 18 }
+    } as Record<string, { address: string; decimals: number }>
 };
 
 import util from 'util';
