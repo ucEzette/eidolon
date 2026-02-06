@@ -215,9 +215,9 @@ export function SummoningPortal() {
 
             <div className="bg-black/40 p-4 md:p-8 relative backdrop-blur-md">
                 {/* Header */}
-                <div className="mb-8 text-center">
+                <div className="mb-6 md:mb-8 text-center px-2">
                     <div className="inline-flex items-center justify-center p-3 mb-4 border border-phantom-cyan/20 bg-phantom-cyan/5 shadow-[0_0_20px_-5px_rgba(165,243,252,0.3)]">
-                        <div className="relative w-16 h-16">
+                        <div className="relative w-12 h-12 md:w-16 md:h-16">
                             <Image
                                 src="/eye_of_god.png"
                                 alt="Eye of God"
@@ -226,8 +226,8 @@ export function SummoningPortal() {
                             />
                         </div>
                     </div>
-                    <h1 className="text-2xl md:text-3xl font-display font-bold text-white tracking-widest uppercase mb-2 drop-shadow-md">Summon Ghost Permit</h1>
-                    <p className="text-text-muted text-sm font-mono">Authorize zero-TVL liquidity without locking assets.</p>
+                    <h1 className="text-xl md:text-3xl font-display font-bold text-white tracking-widest uppercase mb-2 drop-shadow-md">Summon Ghost Permit</h1>
+                    <p className="text-text-muted text-xs md:text-sm font-mono">Authorize zero-TVL liquidity without locking assets.</p>
                 </div>
 
                 {/* Error Banner */}
@@ -241,19 +241,19 @@ export function SummoningPortal() {
                 {/* ═══════════════════════════════════════════════════════════════════════════ */}
                 {/* LIQUIDITY MODE SELECTION */}
                 {/* ═══════════════════════════════════════════════════════════════════════════ */}
-                <div className="mb-6 p-4 rounded-xl bg-white/5 border border-white/5">
+                <div className="mb-6 p-3 md:p-4 rounded-xl bg-white/5 border border-white/5">
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-primary text-[18px]">layers</span>
-                            <span className="text-sm font-medium text-white/90">Liquidity Mode</span>
+                            <span className="text-xs md:text-sm font-medium text-white/90 uppercase tracking-tight md:tracking-normal">Liquidity Mode</span>
                             {/* Info Button with Tooltip */}
                             <div className="relative group/info">
                                 <button className="p-1 rounded-full hover:bg-white/10 transition-colors">
                                     <span className="material-symbols-outlined text-[16px] text-white/40 group-hover/info:text-primary">info</span>
                                 </button>
                                 {/* Collapsible Info Tooltip */}
-                                <div className="absolute left-0 top-8 z-50 w-72 p-4 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <div className="space-y-3 text-xs">
+                                <div className="absolute left-1/2 md:left-0 -translate-x-1/2 md:translate-x-0 top-8 z-50 w-64 md:w-72 p-4 rounded-xl bg-[#1a1229] border border-primary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 pointer-events-none">
+                                    <div className="space-y-3 text-[10px] md:text-xs">
                                         <div>
                                             <p className="font-bold text-primary mb-1">🔹 One-Sided Liquidity ({fees.singleSided}% Fee)</p>
                                             <p className="text-white/60">Provide just one token. Protocol fee is {fees.singleSided}%.</p>
@@ -267,8 +267,8 @@ export function SummoningPortal() {
                             </div>
                         </div>
                         {membership.isMember && (
-                            <span className="text-xs font-bold text-amber-400 border border-amber-400/30 px-2 py-0.5 rounded-full bg-amber-400/10">
-                                MEMBER (0% FEE)
+                            <span className="text-[10px] md:text-xs font-bold text-amber-400 border border-amber-400/30 px-2 py-0.5 rounded-full bg-amber-400/10">
+                                MEMBER (0%)
                             </span>
                         )}
                     </div>
@@ -277,22 +277,22 @@ export function SummoningPortal() {
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             onClick={() => setLiquidityMode('one-sided')}
-                            className={`py-3 px-4 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2 border
+                            className={`py-2.5 md:py-3 px-2 md:px-4 text-[10px] md:text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2 border
                                 ${liquidityMode === 'one-sided'
                                     ? 'bg-phantom-cyan text-black border-phantom-cyan shadow-[0_0_10px_rgba(165,243,252,0.3)]'
                                     : 'bg-transparent text-slate-500 border-white/10 hover:border-white/20 hover:text-white'}`}
                         >
-                            <span className="material-symbols-outlined text-[18px]">radio_button_checked</span>
+                            <span className="material-symbols-outlined text-[16px] md:text-[18px]">radio_button_checked</span>
                             One-Sided
                         </button>
                         <button
                             onClick={() => setLiquidityMode('dual-sided')}
-                            className={`py-3 px-4 text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2 border
+                            className={`py-2.5 md:py-3 px-2 md:px-4 text-[10px] md:text-sm font-bold uppercase tracking-wide transition-all duration-200 flex items-center justify-center gap-2 border
                                 ${liquidityMode === 'dual-sided'
                                     ? 'bg-phantom-cyan text-black border-phantom-cyan shadow-[0_0_10px_rgba(165,243,252,0.3)]'
                                     : 'bg-transparent text-slate-500 border-white/10 hover:border-white/20 hover:text-white'}`}
                         >
-                            <span className="material-symbols-outlined text-[18px]">radio_button_checked</span>
+                            <span className="material-symbols-outlined text-[16px] md:text-[18px]">radio_button_checked</span>
                             Dual-Sided
                         </button>
                     </div>
@@ -315,23 +315,23 @@ export function SummoningPortal() {
                         <div className="relative flex items-center bg-black border border-white/10 hover:border-white/20 focus-within:border-phantom-cyan focus-within:shadow-[0_0_10px_-2px_rgba(165,243,252,0.3)] transition-all duration-300">
                             {/* Input */}
                             <input
-                                className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-xl md:text-3xl font-medium placeholder-white/20 p-5 pr-24 md:pr-32 caret-phantom-cyan"
+                                className="w-full bg-transparent border-none focus:ring-0 text-white font-mono text-xl md:text-3xl font-medium placeholder-white/20 p-4 md:p-5 pr-24 md:pr-32 caret-phantom-cyan"
                                 placeholder="0.00"
                                 type="text"
                                 value={amount}
                                 onChange={(e) => setAmount(e.target.value)}
                             />
                             {/* Token Selector Pill */}
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2">
                                 <button
                                     onClick={() => setIsTokenSelectorOpen(true)}
-                                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 text-white pl-2 pr-3 py-1.5 border border-white/10 transition-colors"
+                                    className="flex items-center gap-1 md:gap-2 bg-white/5 hover:bg-white/10 text-white pl-1.5 md:pl-2 pr-2 md:pr-3 py-1 md:py-1.5 border border-white/10 transition-colors"
                                 >
-                                    <div className="size-5 md:size-6 rounded-none bg-white/10 flex items-center justify-center overflow-hidden">
+                                    <div className="size-5 md:size-6 rounded-none bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
                                         <span className="text-[10px] md:text-xs font-bold text-white/80">{tokenA.symbol[0]}</span>
                                     </div>
-                                    <span className="font-bold text-xs md:text-sm font-mono">{tokenA.symbol}</span>
-                                    <span className="material-symbols-outlined text-lg text-white/50">expand_more</span>
+                                    <span className="font-bold text-[10px] md:text-sm font-mono truncate max-w-[40px] md:max-w-none">{tokenA.symbol}</span>
+                                    <span className="material-symbols-outlined text-base md:text-lg text-white/50">expand_more</span>
                                 </button>
                             </div>
                         </div>

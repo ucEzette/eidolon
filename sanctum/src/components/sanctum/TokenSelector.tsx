@@ -59,13 +59,13 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0a0812]/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="relative w-full max-w-[520px] rounded-[2rem] p-[1px] bg-gradient-to-br from-cyan-400 via-cyan-600 to-indigo-900 shadow-[0_0_40px_-10px_rgba(34,211,238,0.4)]">
-                <div className="bg-[#02040a] relative flex h-[700px] w-full flex-col overflow-hidden rounded-[2rem]">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#0a0812]/90 sm:backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="relative w-full max-w-[520px] sm:rounded-[2rem] p-[1px] bg-gradient-to-br from-cyan-400 via-cyan-600 to-indigo-900 shadow-[0_0_40px_-10px_rgba(34,211,238,0.4)] sm:h-auto h-[90vh] overflow-hidden">
+                <div className="bg-[#02040a] relative flex h-full w-full flex-col overflow-hidden sm:rounded-[2rem]">
 
                     {/* Header */}
-                    <div className="flex items-center justify-between px-6 py-5 border-b border-white/5">
-                        <h2 className="text-xl font-bold tracking-tight text-white font-display">Summon Asset</h2>
+                    <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-white/5">
+                        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white font-display">Select Token</h2>
                         <button
                             onClick={onClose}
                             className="group flex h-8 w-8 items-center justify-center rounded-full bg-white/5 transition-colors hover:bg-white/10 text-white/70 hover:text-white"
@@ -75,14 +75,14 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
                     </div>
 
                     {/* Search */}
-                    <div className="px-6 pt-6 pb-2">
+                    <div className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2">
                         <div className="relative group/search">
                             <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-cyan-200/50 group-focus-within/search:text-cyan-400 transition-colors">
-                                <span className="material-symbols-outlined text-[20px]">search</span>
+                                <span className="material-symbols-outlined text-[18px] sm:text-[20px]">search</span>
                             </div>
                             <input
-                                className="w-full h-12 rounded-full bg-[#0a0812]/60 border border-white/10 pl-11 pr-4 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-cyan-400/50 focus:ring-1 focus:ring-cyan-400/50 focus:shadow-[0_0_15px_rgba(34,211,238,0.2)] transition-all duration-300 font-display"
-                                placeholder="Search by name or paste address"
+                                className="w-full h-10 sm:h-12 rounded-full bg-[#0a0812]/60 border border-white/10 pl-11 pr-4 text-xs sm:text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-cyan-400/50 transition-all duration-300 font-display"
+                                placeholder="Name or address"
                                 type="text"
                                 autoFocus
                                 value={search}
@@ -92,11 +92,10 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
                     </div>
 
                     {/* Trending */}
-                    <div className="px-6 py-4">
-                        <p className="mb-3 text-xs font-medium uppercase tracking-widest text-white/40">Trending Vessels</p>
-                        <div className="flex flex-wrap gap-2">
+                    <div className="px-4 sm:px-6 py-3 sm:py-4">
+                        <p className="mb-2 sm:mb-3 text-[10px] font-medium uppercase tracking-widest text-white/40">Trending</p>
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
                             <TrendingChip symbol="ETH" change="+1.2%" isPositive />
-                            <TrendingChip symbol="eiETH" change="+100%" isPositive />
                             <TrendingChip symbol="USDC" change="+0.01%" isPositive />
                         </div>
                     </div>
@@ -150,9 +149,9 @@ export function TokenSelector({ isOpen, onClose, onSelect }: TokenSelectorProps)
 
 function TrendingChip({ symbol, change, isPositive }: { symbol: string, change: string, isPositive?: boolean }) {
     return (
-        <button className="group flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 border border-white/5 transition-all hover:bg-white/10 hover:border-cyan-400/50 hover:shadow-[0_0_10px_rgba(34,211,238,0.2)]">
-            <span className="text-sm font-medium text-white">{symbol}</span>
-            <span className={`font-mono text-xs flex items-center ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+        <button className="group flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/5 px-2.5 sm:px-3 py-1 sm:py-1.5 border border-white/5 transition-all hover:bg-white/10 hover:border-cyan-400/50 hover:shadow-[0_0_10px_rgba(34,211,238,0.2)]">
+            <span className="text-xs sm:text-sm font-medium text-white">{symbol}</span>
+            <span className={`font-mono text-[10px] sm:text-xs flex items-center ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
                 <span className="material-symbols-outlined text-[10px] mr-0.5">
                     {isPositive ? 'arrow_upward' : 'arrow_downward'}
                 </span>

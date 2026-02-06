@@ -149,19 +149,19 @@ export function MirrorDashboard() {
             />
 
             {/* Top Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                 {/* Card 1: Virtual TVL */}
-                <div className="relative overflow-visible p-6 group bg-black border border-white/10 hover:border-phantom-cyan/50 transition-all">
+                <div className="relative overflow-visible p-4 md:p-6 group bg-black border border-white/10 hover:border-phantom-cyan/50 transition-all">
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                         <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/5 blur-3xl transition-all group-hover:bg-phantom-cyan/10"></div>
                     </div>
-                    <div className="relative z-10 flex items-center justify-between mb-4">
+                    <div className="relative z-10 flex items-center justify-between mb-2 md:mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Virtual TVL</p>
+                            <p className="text-slate-500 text-[10px] md:text-sm font-bold uppercase tracking-widest">Virtual TVL</p>
                             {/* Info Tooltip */}
                             <div className="relative group/info">
                                 <button className="p-0.5 hover:bg-white/10 transition-colors">
-                                    <span className="material-symbols-outlined text-[14px] text-slate-600 group-hover/info:text-phantom-cyan">info</span>
+                                    <span className="material-symbols-outlined text-[12px] md:text-[14px] text-slate-600 group-hover/info:text-phantom-cyan">info</span>
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
                                     <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">Virtual TVL</p>
@@ -169,79 +169,75 @@ export function MirrorDashboard() {
                                 </div>
                             </div>
                         </div>
-                        <span className="material-symbols-outlined text-slate-600 group-hover:text-phantom-cyan transition-colors">query_stats</span>
+                        <span className="material-symbols-outlined text-slate-600 group-hover:text-phantom-cyan transition-colors text-base md:text-lg">query_stats</span>
                     </div>
-                    <div className="relative z-10 flex items-baseline gap-3">
-                        <h3 className="text-3xl font-bold text-white font-mono tracking-tighter">$4,203,192<span className="text-slate-600 text-xl">.00</span></h3>
+                    <div className="relative z-10 flex items-baseline gap-2 md:gap-3">
+                        <h3 className="text-2xl md:text-3xl font-bold text-white font-mono tracking-tighter">$4,203,192<span className="text-slate-600 text-lg md:text-xl">.00</span></h3>
                     </div>
-                    <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-emerald-500 font-mono">
-                        <span className="material-symbols-outlined text-sm">trending_up</span>
+                    <div className="relative z-10 mt-1 md:mt-2 flex items-center gap-1.5 text-[10px] md:text-xs font-medium text-emerald-500 font-mono">
+                        <span className="material-symbols-outlined text-xs md:text-sm">trending_up</span>
                         <span>+1.2% (24h)</span>
                     </div>
                 </div>
 
-                {/* Card 2: Ghost Permits */}
-                <div className="relative overflow-visible p-6 group bg-black border border-white/10 hover:border-signal-cyan/50 transition-all">
+                {/* Card 2: Account Status */}
+                <div className="relative overflow-visible p-4 md:p-6 group bg-black border border-white/10 hover:border-signal-cyan/50 transition-all">
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                         <div className="absolute -right-10 -top-10 h-32 w-32 bg-secondary/5 blur-3xl transition-all group-hover:bg-secondary/10"></div>
                     </div>
-                    <div className="relative z-10 flex items-center justify-between mb-4">
+                    <div className="relative z-10 flex items-center justify-between mb-2 md:mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">Account Status</p>
+                            <p className="text-slate-500 text-[10px] md:text-sm font-bold uppercase tracking-widest">Tier</p>
                             <div className="relative group/info">
                                 <button className="p-0.5 hover:bg-white/10 transition-colors">
-                                    <span className="material-symbols-outlined text-[14px] text-slate-600 group-hover/info:text-secondary">info</span>
+                                    <span className="material-symbols-outlined text-[12px] md:text-[14px] text-slate-600 group-hover/info:text-secondary">info</span>
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-secondary/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
-                                    <p className="font-bold text-secondary text-xs mb-1 font-mono uppercase">Membership Tier</p>
+                                    <p className="font-bold text-secondary text-xs mb-1 font-mono uppercase">Membership</p>
                                     <p className="text-white/60 text-xs font-mono">{membership.isMember ? "Active membership." : "Standard user."}</p>
                                 </div>
                             </div>
                         </div>
-                        <span className="material-symbols-outlined text-slate-600 group-hover:text-secondary transition-colors">badge</span>
+                        <span className="material-symbols-outlined text-slate-600 group-hover:text-secondary transition-colors text-base md:text-lg">badge</span>
                     </div>
-                    <div className="relative z-10 flex items-baseline gap-3">
-                        <h3 className="text-2xl font-bold text-white font-mono tracking-tighter">{userTier}</h3>
-                        <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider border ${membership.isMember ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
+                    <div className="relative z-10 flex items-baseline gap-2 md:gap-3">
+                        <h3 className="text-xl md:text-2xl font-bold text-white font-mono tracking-tighter truncate">{userTier}</h3>
+                        <span className={`px-1.5 md:px-2 py-0.5 text-[8px] md:text-xs font-bold uppercase tracking-wider border ${membership.isMember ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>
                             {membership.isMember ? 'Active' : 'Basic'}
                         </span>
                     </div>
-                    <div className="relative z-10 mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
-                        <span>Current Fee Rate: <span className="text-white">{feeTier}</span></span>
+                    <div className="relative z-10 mt-1 md:mt-2 flex items-center gap-1.5 text-[10px] md:text-xs font-medium text-slate-500 font-mono">
+                        <span>Fee Rate: <span className="text-white">{feeTier}</span></span>
                     </div>
                 </div>
 
                 {/* Card 3: Your Rewards */}
-                <div className="relative overflow-visible p-6 group border border-phantom-cyan/30 bg-black hover:border-phantom-cyan/60 transition-all">
+                <div className="relative overflow-visible p-4 md:p-6 group border border-phantom-cyan/30 bg-black hover:border-phantom-cyan/60 transition-all">
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
                         <div className="absolute -right-10 -top-10 h-32 w-32 bg-phantom-cyan/10 blur-3xl transition-all group-hover:bg-phantom-cyan/20"></div>
                     </div>
-                    <div className="relative z-10 flex items-center justify-between mb-4">
+                    <div className="relative z-10 flex items-center justify-between mb-2 md:mb-4">
                         <div className="flex items-center gap-2">
-                            <p className="text-phantom-cyan text-sm font-bold uppercase tracking-widest drop-shadow-[0_0_8px_rgba(165,243,252,0.3)]">Your Rewards</p>
-                            {/* Info Tooltip */}
+                            <p className="text-phantom-cyan text-[10px] md:text-sm font-bold uppercase tracking-widest">Rewards</p>
                             <div className="relative group/info">
                                 <button className="p-0.5 hover:bg-white/10 transition-colors">
-                                    <span className="material-symbols-outlined text-[14px] text-phantom-cyan/60 group-hover/info:text-phantom-cyan">info</span>
+                                    <span className="material-symbols-outlined text-[12px] md:text-[14px] text-phantom-cyan/60 group-hover/info:text-phantom-cyan">info</span>
                                 </button>
                                 <div className="absolute left-0 top-6 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200">
                                     <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">Realized Fees</p>
-                                    <p className="text-white/60 text-xs font-mono">Accumulated fees paid directly to your wallet from JIT liquidity provision.</p>
+                                    <p className="text-white/60 text-xs font-mono">Accumulated fees paid directly to your wallet.</p>
                                 </div>
                             </div>
                         </div>
-                        <span className="material-symbols-outlined text-phantom-cyan">savings</span>
+                        <span className="material-symbols-outlined text-phantom-cyan text-base md:text-lg">savings</span>
                     </div>
                     <div className="relative z-10 flex items-baseline justify-between w-full">
-                        <h3 className="text-xl font-bold text-white font-mono tracking-tighter truncate" title={rewardsDisplay}>
+                        <h3 className="text-lg md:text-xl font-bold text-white font-mono tracking-tighter truncate" title={rewardsDisplay}>
                             {rewardsDisplay}
                         </h3>
-                        <div className="flex flex-col items-end">
-                            <span className="text-[10px] uppercase text-slate-500 font-mono">Lifetime Earned</span>
-                        </div>
                     </div>
-                    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 font-mono">
-                        <span>Auto-compounding active</span>
+                    <div className="mt-1 md:mt-2 flex items-center gap-1.5 text-[10px] md:text-xs font-medium text-slate-500 font-mono">
+                        <span>Auto-compound: ON</span>
                     </div>
                 </div>
             </div>
@@ -278,49 +274,24 @@ export function MirrorDashboard() {
                     </p>
                 </div>
 
-                <div className="overflow-hidden bg-black/60 border border-white/5">
-                    <div className="overflow-x-auto">
+                <div className="overflow-hidden bg-black/60 border border-white/5 rounded-xl">
+                    {/* Desktop View: Table */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="border-b border-white/5 bg-white/[0.02]">
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Asset Pair</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Liquidity</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Expiry Countdown</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">
-                                        <div className="flex items-center gap-1.5">
-                                            APY
-                                            <div className="relative group/info">
-                                                <span className="material-symbols-outlined text-[12px] text-slate-600 group-hover/info:text-phantom-cyan cursor-help">info</span>
-                                                <div className="absolute left-0 top-5 z-50 w-56 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
-                                                    <p className="font-bold text-phantom-cyan text-xs mb-1 font-mono uppercase">APY</p>
-                                                    <p className="text-white/60 text-xs font-mono">Annual Percentage Yield based on utilization.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-right">
-                                        <div className="flex items-center gap-1.5 justify-end">
-                                            Status
-                                            <div className="relative group/info">
-                                                <span className="material-symbols-outlined text--[12px] text-slate-600 group-hover/info:text-phantom-cyan cursor-help">info</span>
-                                                <div className="absolute right-0 top-5 z-50 w-64 p-3 bg-black border border-phantom-cyan/30 shadow-2xl opacity-0 invisible group-hover/info:opacity-100 group-hover/info:visible transition-all duration-200 normal-case">
-                                                    <div className="space-y-2 text-xs font-mono">
-                                                        <div><span className="text-emerald-400 font-bold">Active</span><span className="text-white/60"> - Ready</span></div>
-                                                        <div><span className="text-amber-400 font-bold">Expiring</span><span className="text-white/60"> - {`<`} 3h</span></div>
-                                                        <div><span className="text-slate-400 font-bold">Expired</span><span className="text-white/60"> - Invalid</span></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-center">Expiry</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-center">Status</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-right">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5 text-sm">
                                 {activePositions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-mono">
-                                            No active Ghost Permits found. Summon one to begin.
+                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500 font-mono">
+                                            Void of active Mirror Positions.
                                         </td>
                                     </tr>
                                 ) : (
@@ -330,7 +301,6 @@ export function MirrorDashboard() {
                                         const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
                                         const isExpired = timeLeft <= 0;
                                         const isExpiringSoon = timeLeft < 3 * 60 * 60 * 1000 && !isExpired;
-                                        // Default to one-sided if undefined (legacy data)
                                         const isDual = pos.liquidityMode === 'dual-sided';
 
                                         return (
@@ -338,8 +308,8 @@ export function MirrorDashboard() {
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="flex -space-x-2">
-                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA}</div>
-                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB}</div>
+                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA?.[0]}</div>
+                                                            <div className="h-8 w-8 rounded-full bg-slate-700 ring-2 ring-[#13131a] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB?.[0]}</div>
                                                         </div>
                                                         <div>
                                                             <div className="font-bold text-white flex items-center gap-2">
@@ -348,46 +318,29 @@ export function MirrorDashboard() {
                                                                     {isDual ? 'Dual' : 'Single'}
                                                                 </span>
                                                             </div>
-                                                            <div className="text-xs text-slate-500">Unichain Sepolia • V4</div>
+                                                            <div className="text-xs text-slate-500">Unichain Sepolia</div>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 font-mono text-slate-300">
                                                     <div className="flex flex-col">
                                                         <span>{pos.amountA} <span className="text-xs text-slate-500">{pos.tokenA}</span></span>
-                                                        {isDual && (
-                                                            <span>{pos.amountB} <span className="text-xs text-slate-500">{pos.tokenB}</span></span>
-                                                        )}
+                                                        {isDual && <span>{pos.amountB} <span className="text-xs text-slate-500">{pos.tokenB}</span></span>}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <div className={`flex items-center gap-2 font-mono ${isExpired ? 'text-red-400' : (isExpiringSoon ? 'text-amber-400' : 'text-emerald-400')}`}>
-                                                        <span className="material-symbols-outlined text-base">timer</span>
+                                                <td className="px-6 py-4 text-center">
+                                                    <div className={`inline-flex items-center gap-1.5 font-mono text-xs ${isExpired ? 'text-red-400' : (isExpiringSoon ? 'text-amber-400' : 'text-emerald-400')}`}>
                                                         {isExpired ? "Expired" : `${hours}h ${minutes}m`}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4 font-mono text-primary font-bold">
-                                                    100% <span className="text-[10px] text-slate-500 font-normal">(JIT)</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border shadow-[0_0_10px_rgba(16,185,129,0.2)]
-                                                        ${isExpired ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-                                                        {!isExpired && (
-                                                            <span className="relative flex h-2 w-2">
-                                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                                            </span>
-                                                        )}
-                                                        {isExpired ? "Expired" : "Active"}
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                                                        {isExpired ? "OFFLINE" : "ACTIVE"}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button
-                                                        onClick={() => handleRevokeClick(pos)}
-                                                        className="text-slate-400 hover:text-white transition-colors"
-                                                        title="Revoke Permit"
-                                                    >
-                                                        <span className="material-symbols-outlined">delete</span>
+                                                    <button onClick={() => handleRevokeClick(pos)} className="p-2 text-slate-500 hover:text-red-400 transition-colors">
+                                                        <span className="material-symbols-outlined text-lg">delete</span>
                                                     </button>
                                                 </td>
                                             </tr>
@@ -396,6 +349,63 @@ export function MirrorDashboard() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Mobile View: Cards */}
+                    <div className="md:hidden divide-y divide-white/5">
+                        {activePositions.length === 0 ? (
+                            <div className="px-6 py-12 text-center text-slate-500 font-mono text-sm">
+                                No active Mirror Positions.
+                            </div>
+                        ) : (
+                            activePositions.map((pos) => {
+                                const timeLeft = Math.max(0, pos.expiry - now);
+                                const hours = Math.floor(timeLeft / (1000 * 60 * 60));
+                                const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+                                const isExpired = timeLeft <= 0;
+                                const isDual = pos.liquidityMode === 'dual-sided';
+
+                                return (
+                                    <div key={pos.id} className="p-4 flex flex-col gap-4">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex -space-x-1.5">
+                                                    <div className="h-7 w-7 rounded-full bg-slate-700 ring-2 ring-[#0a0a0f] flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br from-blue-600 to-indigo-600">{pos.tokenA?.[0]}</div>
+                                                    <div className="h-7 w-7 rounded-full bg-slate-700 ring-2 ring-[#0a0a0f] flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br from-blue-400 to-cyan-400">{pos.tokenB?.[0]}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-white">{pos.tokenA}-{pos.tokenB}</div>
+                                                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">{isDual ? 'Dual Sided' : 'Single Sided'}</div>
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                                                {isExpired ? 'OFFLINE' : 'ACTIVE'}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 bg-white/5 rounded-lg p-3">
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 uppercase mb-1">Liquidity</div>
+                                                <div className="text-xs font-mono text-white truncate">{pos.amountA} {pos.tokenA}</div>
+                                                {isDual && <div className="text-xs font-mono text-white truncate">{pos.amountB} {pos.tokenB}</div>}
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-[10px] text-slate-500 uppercase mb-1">Expires In</div>
+                                                <div className={`text-xs font-mono font-bold ${isExpired ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                    {isExpired ? 'Now' : `${hours}h ${minutes}m`}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleRevokeClick(pos)}
+                                            className="w-full py-2.5 rounded-lg border border-red-500/20 bg-red-500/5 text-red-400 font-bold text-xs flex items-center justify-center gap-2 active:bg-red-500/20 transition-all"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">delete</span>
+                                            REVOKE PERMIT
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>

@@ -24,13 +24,13 @@ export function Navbar() {
         <nav className="sticky top-0 z-50 w-full border-b border-white/5 bg-[#0a0a0f]/80 backdrop-blur-md">
             <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-8">
                 {/* Logo */}
-                <Link href="/" className="flex items-center gap-3 group">
-                    <div className="relative h-32 w-32 overflow-hidden rounded-none">
+                <Link href="/" className="flex items-center gap-3 group shrink-0">
+                    <div className="relative h-20 w-32 md:h-32 md:w-40 overflow-hidden rounded-none">
                         <Image
                             src="/eidolonLOGO.png"
                             alt="EIDOLON"
                             fill
-                            sizes="(max-width: 768px) 100px, 128px"
+                            sizes="(max-width: 768px) 128px, 160px"
                             className="object-contain filter brightness-125 drop-shadow-[0_0_8px_rgba(165,243,252,0.5)]"
                             priority
                         />
@@ -49,7 +49,7 @@ export function Navbar() {
                 {/* Right Actions */}
                 <div className="flex items-center gap-3">
                     {isConnected && (
-                        <div className="hidden sm:flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 pr-4 shadow-[0_0_10px_-3px_rgba(165,243,252,0.3)] backdrop-blur-sm">
+                        <div className="hidden lg:flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-1.5 pr-4 shadow-[0_0_10px_-3px_rgba(165,243,252,0.3)] backdrop-blur-sm transition-all hover:border-primary/50">
                             <div className="relative flex items-center justify-center size-5">
                                 <span className="material-symbols-outlined text-primary text-[18px] animate-pulse">language</span>
                             </div>
@@ -59,16 +59,16 @@ export function Navbar() {
                             </div>
                         </div>
                     )}
-                    <div className="hidden md:block">
+                    <div className="hidden sm:block">
                         <ConnectWallet />
                     </div>
 
                     {/* Mobile Menu Button */}
                     <button
-                        className="md:hidden p-2 text-slate-400 hover:text-white"
+                        className="md:hidden p-2 text-slate-400 hover:text-white transition-all active:scale-90"
                         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                     >
-                        <span className="material-symbols-outlined text-2xl">{isMobileMenuOpen ? 'close' : 'menu'}</span>
+                        <span className="material-symbols-outlined text-3xl">{isMobileMenuOpen ? 'close' : 'menu'}</span>
                     </button>
                 </div>
             </div>
