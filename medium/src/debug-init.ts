@@ -26,7 +26,7 @@ const USDC = "0x31d0220469e10c4E71834a79b1f276d740d3768F" as `0x${string}`;
 const NATIVE_ETH = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 const FEE = 3000;
-const TICK_SPACING = 60;
+const TICK_SPACING = 200;
 
 // ABI
 const ABI = parseAbi([

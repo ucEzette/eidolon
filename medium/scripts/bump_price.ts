@@ -47,7 +47,7 @@ async function main() {
         currency0: NATIVE as `0x${string}`,
         currency1: eiETH as `0x${string}`,
         fee: 3000,
-        tickSpacing: 60,
+        tickSpacing: 200,
         hooks: HOOK as `0x${string}`
     };
 
@@ -91,7 +91,7 @@ async function main() {
         currency0: WETH as `0x${string}`,
         currency1: eiETH as `0x${string}`,
         fee: 3000,
-        tickSpacing: 60,
+        tickSpacing: 200,
         hooks: HOOK as `0x${string}`
     };
 
