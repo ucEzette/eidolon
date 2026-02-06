@@ -100,7 +100,7 @@ export class Executor {
         const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
 
         const normalize = (addr: string) => {
-            if (!addr) return ZERO_ADDRESS;
+            if (!addr) return WETH_ADDRESS;
             const clean = addr.trim();
 
             // FAIL FAST on truncated addresses
@@ -109,36 +109,42 @@ export class Executor {
                 throw new Error(`Data Contamination: Address "${clean}" is truncated.`);
             }
 
+            // Check if already a hex address
+            if (clean.startsWith('0x') && clean.length === 42) return clean as `0x${string}`;
+
             // 1. Check for symbol resolution (e.g. "eiETH", "ETH")
-            // Handle case-insensitivity by checking values in the map
-            const tokenSymbol = clean;
+            const tokenSymbol = clean.toUpperCase();
             const tokenEntry = Object.entries(CONFIG.TOKENS).find(
-                ([symbol]) => symbol.toLowerCase() === tokenSymbol.toLowerCase()
+                ([symbol]) => symbol.toUpperCase() === tokenSymbol
             );
 
             if (tokenEntry) {
                 const resolved = tokenEntry[1].address;
-                return (resolved === ZERO_ADDRESS ? WETH_ADDRESS : resolved) as `0x${string}`;
+                const finalAddr = (resolved === ZERO_ADDRESS ? WETH_ADDRESS : resolved) as `0x${string}`;
+                console.log(`   💎 Resolved ${clean} -> ${finalAddr}`);
+                return finalAddr;
             }
 
-            // 2. Map standard variants
+            // 2. Manual fallbacks for known test symbols (Safety net)
+            if (tokenSymbol === "EIETH") {
+                console.log(`   💎 Resolved eiETH -> 0xe02eb159eb92dd0388ecdb33d0db0f8831091be6 (Fallback)`);
+                return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" as `0x${string}`;
+            }
+
             const lower = clean.toLowerCase();
             if (lower === "eth" || lower === ZERO_ADDRESS) return WETH_ADDRESS;
             if (lower === "weth") return WETH_ADDRESS;
 
-            // 3. Fallback: Allow direct hex addresses
+            console.warn(`   ⚠️  Failed to resolve token: ${clean}. Using as-is.`);
             return clean as `0x${string}`;
         };
 
         const getDecimals = (addr: string) => {
             const lowerAddr = addr.toLowerCase();
-            // Check TOKENS map by address
             const token = Object.values(CONFIG.TOKENS).find(
                 t => t.address.toLowerCase() === lowerAddr
             );
             if (token) return token.decimals;
-
-            // Fallback heuristics
             if (lowerAddr === "0x31d0220469e10c4e71834a79b1f276d740d3768f") return 6; // USDC
             return 18;
         };
@@ -146,6 +152,7 @@ export class Executor {
         const tokenA = normalize(order.tokenA);
         const tokenB = normalize(order.tokenB);
         const decimalsA = getDecimals(tokenA);
+        const decimalsB = getDecimals(tokenB);
 
         try {
             // 1. Construct Witness Struct (Must match WitnessLib)
@@ -268,28 +275,30 @@ export class Executor {
             console.log("   🔑 Pool Key Constructed:", poolKey);
 
             // 5. Verify Pool State & Calculate Dynamic Price Limit
-            const poolId = order.poolId as `0x${string}`;
-            console.log(`   🌊 Checking Pool State for ID: ${poolId}`);
+            // RECALCULATE POOL ID LOCALLY (Do not trust order.poolId for storage reads)
+            // Univ4 requires currency0 < currency1 and non-native tokens (standardized to WETH)
+            const fee = order.fee || CONFIG.POOLS.canonical.fee;
+            const tickSpacing = order.tickSpacing || CONFIG.POOLS.canonical.tickSpacing;
+            const hooks = (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`;
 
-            // by initializing it before the `if` checks in the ReplacementContent 
-            // and carrying it through.
+            // Helper to get local PoolID (matches Frontend and Univ4 standard)
+            const getLocalPoolId = (c0: string, c1: string, f: number, ts: number, h: string) => {
+                const [t0, t1] = c0.toLowerCase() < c1.toLowerCase() ? [c0, c1] : [c1, c0];
+                const encoded = encodeAbiParameters(
+                    [
+                        { name: 'currency0', type: 'address' },
+                        { name: 'currency1', type: 'address' },
+                        { name: 'fee', type: 'uint24' },
+                        { name: 'tickSpacing', type: 'int24' },
+                        { name: 'hooks', type: 'address' },
+                    ],
+                    [t0 as `0x${string}`, t1 as `0x${string}`, f, ts, h as `0x${string}`]
+                );
+                return keccak256(encoded);
+            };
 
-            // Correction: The `try` block ends at line 304. The `args` usage is at line 322.
-            // If I define `limitX96` inside `try`, it won't be visible at `args`.
-            // So I must hoist the variable declaration.
-
-            // Let's modify the plan: 
-            // 1. Initialize `let limitX96 = zeroForOne ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n;` BEFORE the try.
-            // 2. Update it inside the try.
-            // 3. Use it in args.
-
-            // BUT, valid replacement must match exact lines.
-            // I will replace from `try {` (line 263) down to `args: [` (line 316).
-            // That is a large chunk but safe.
-
-            // Actually, I'll just replace the `try/catch` block and the `const hash = ...` block together.
-
-            // Let's refine the replacement to be robust.
+            const poolId = getLocalPoolId(currency0, currency1, fee, tickSpacing, hooks);
+            console.log(`   🌊 Reading Pool State for ID: ${poolId}`);
 
             let limitX96 = zeroForOne ? 4295128740n : 1461446703485210103287273052203988822378723970341n; // Default Fallback
 
@@ -306,8 +315,7 @@ export class Executor {
                     [poolId, MAPPING_SLOT]
                 );
                 const storageSlot = keccak256(mappingKey);
-                console.log(`   🔍 Debug Storage Slot: ${storageSlot}`);
-                console.log(`   🔍 Debug Pool ID: ${poolId}`);
+                console.log(`   🔍 Resolved Storage Slot: ${storageSlot}`);
 
                 const slotData = await this.client.readContract({
                     address: CONFIG.CONTRACTS.POOL_MANAGER as `0x${string}`,

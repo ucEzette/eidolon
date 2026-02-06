@@ -135,8 +135,18 @@ export function SummoningPortal() {
         const WETH_ADDR = TOKEN_MAP["WETH"].address;
         const EIETH_ADDR = TOKEN_MAP["eiETH"].address;
 
-        const isWeth = signingTokenA.toLowerCase() === WETH_ADDR.toLowerCase() || signingTokenB.toLowerCase() === WETH_ADDR.toLowerCase();
-        const isEieth = signingTokenA.toLowerCase() === EIETH_ADDR.toLowerCase() || signingTokenB.toLowerCase() === EIETH_ADDR.toLowerCase();
+        // CANONICAL normalization for PoolID (V4 requires sorted, non-native tokens)
+        const normalizeForPool = (addr: string) => {
+            const ZERO = TOKENS[0].address;
+            if (addr === ZERO) return WETH_ADDR;
+            return addr;
+        };
+
+        const poolToken0 = normalizeForPool(signingTokenA);
+        const poolToken1 = normalizeForPool(signingTokenB);
+
+        const isWeth = poolToken0.toLowerCase() === WETH_ADDR.toLowerCase() || poolToken1.toLowerCase() === WETH_ADDR.toLowerCase();
+        const isEieth = poolToken0.toLowerCase() === EIETH_ADDR.toLowerCase() || poolToken1.toLowerCase() === EIETH_ADDR.toLowerCase();
 
         if (!showAdvanced && isWeth && isEieth) {
             targetTickSpacing = POOLS.canonical.tickSpacing;
@@ -145,8 +155,8 @@ export function SummoningPortal() {
 
         // Calculate Pool ID properly (V4)
         const poolId = getPoolId(
-            signingTokenA as `0x${string}`,
-            signingTokenB as `0x${string}`,
+            poolToken0 as `0x${string}`,
+            poolToken1 as `0x${string}`,
             targetFee,
             targetTickSpacing,
             targetHook as `0x${string}`
