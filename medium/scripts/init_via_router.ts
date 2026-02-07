@@ -30,7 +30,7 @@ async function main() {
     const currency1 = WETH.toLowerCase() < eiETH.toLowerCase() ? eiETH : WETH;
 
     const POOL_MANAGER = "0x00B036B58a818B1BC34d502D3fE730Db729e62AC";
-    const HOOK_ADDRESS = "0x1244359060e16429A5568085012606c0213020c8";
+    const HOOK_ADDRESS = "0x85bF7A29023EA1f853045fC848b31C9bE4Eaa0C8";
 
     const poolKey = {
         currency0: currency0 as `0x${string}`,
