@@ -5,7 +5,7 @@ import { CONFIG } from '../src/config';
 
 // CONSTANTS
 const POOL_MANAGER = "0x00B036B58a818B1BC34d502D3fE730Db729e62AC";
-const HOOK = "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8";
+const HOOK_ADDRESS = "0xaF98eed0508587C7b8F1c658Dd6a91a0FedE60C8";
 const SLOT_6 = 6n; // The Storage Slot for _pools mapping
 
 // TOKENS

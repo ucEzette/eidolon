@@ -17,7 +17,7 @@ dotenv.config();
 const RPC_URL = process.env.RPC_URL || "https://sepolia.unichain.org";
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
 const SIMPLE_ROUTER = "0x30d0602786f1c242bd9cb4f473E6615a71F37DCA";
-const HOOK = "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8";
+const HOOK_ADDRESS = "0x1244359060e16429A5568085012606c0213020c8";
 
 // TOKENS
 const NATIVE = "0x0000000000000000000000000000000000000000";
@@ -48,7 +48,7 @@ async function main() {
         currency1: eiETH as `0x${string}`,
         fee: 3000,
         tickSpacing: 200,
-        hooks: HOOK as `0x${string}`
+        hooks: HOOK_ADDRESS as `0x${string}`
     };
 
     const amountIn = parseUnits("0.01", 18);
@@ -92,7 +92,7 @@ async function main() {
         currency1: eiETH as `0x${string}`,
         fee: 3000,
         tickSpacing: 200,
-        hooks: HOOK as `0x${string}`
+        hooks: HOOK_ADDRESS as `0x${string}`
     };
 
     const targetPrice = 79228162514264337593543950336n;

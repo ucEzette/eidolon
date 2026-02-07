@@ -30,16 +30,14 @@ async function main() {
     const currency1 = WETH.toLowerCase() < eiETH.toLowerCase() ? eiETH : WETH;
 
     const POOL_MANAGER = "0x00B036B58a818B1BC34d502D3fE730Db729e62AC";
-
-    // OLD HOOK
-    const OLD_HOOK = "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8";
+    const HOOK_ADDRESS = "0x1244359060e16429A5568085012606c0213020c8";
 
     const poolKey = {
         currency0: currency0 as `0x${string}`,
         currency1: currency1 as `0x${string}`,
         fee: 3000,
         tickSpacing: 200,
-        hooks: OLD_HOOK as `0x${string}`
+        hooks: HOOK_ADDRESS as `0x${string}`
     };
 
     // 1:1 Price
@@ -59,7 +57,7 @@ async function main() {
         args: [poolKey, initPrice]
     });
 
-    console.log(`Init Payload: ${hash}`);
+    console.log(`Init Transaction Hash: ${hash}`);
     const receipt = await client.waitForTransactionReceipt({ hash });
 
     if (receipt.status === 'success') {

@@ -3,7 +3,7 @@ import { encodeAbiParameters, keccak256 } from 'viem';
 
 const WETH = "0x4200000000000000000000000000000000000006";
 const eiETH = "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
-const HOOK = "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8";
+const HOOK = "0x1244359060e16429A5568085012606c0213020c8";
 
 const currency0 = (WETH.toLowerCase() < eiETH.toLowerCase() ? WETH : eiETH) as `0x${string}`;
 const currency1 = (WETH.toLowerCase() < eiETH.toLowerCase() ? eiETH : WETH) as `0x${string}`;
