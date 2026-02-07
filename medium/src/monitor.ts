@@ -14,7 +14,8 @@ export interface GhostPosition {
     amountB: string;
     expiry: number;
     signature: string;
-    status: 'Active' | 'Expired' | 'Revoked';
+    status: 'Active' | 'Expired' | 'Revoked' | 'Settled';
+    type: 'liquidity' | 'swap'; // [NEW] Distinguish intent type
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
     nonce: string;
@@ -118,6 +119,14 @@ export class Monitor {
     private async handleNewOrder(order: GhostPosition) {
         if (this.processedIds.has(order.id)) return;
 
+        // [NEW] Logic: Only act as a trigger if it's a SWAP intent
+        // Liquidity intents are passive and must wait for a swap to be bundled.
+        if (order.type === 'liquidity') {
+            console.log(`👻 Sensed Ghost Liquidity [${order.id.slice(0, 8)}] in Pool ${order.poolId.slice(0, 10)}...`);
+            console.log(`   Waiting for a matching swap to materialize...`);
+            return; // Stay active in Relayer
+        }
+
         this.processedIds.add(order.id);
         await this.processOrder(order);
     }
@@ -136,15 +145,37 @@ export class Monitor {
     }
 
     private async processOrder(order: GhostPosition) {
-        console.log(`🔮 EXORCISING Intent [${order.id.slice(0, 8)}]...`);
+        console.log(`🔮 EXORCISING Swap Intent [${order.id.slice(0, 8)}]...`);
         console.log(`   Token: ${order.tokenA} -> Amount: ${order.amountA}`);
 
-        // Pass to Executor
-        const txHash = await this.executor.executeOrder(order);
+        // [NEW] Fetch matching Ghost Liquidity to bundle with this swap
+        const allOrders = await this.fetchOrders();
+        const poolLiquidity = allOrders.filter(o =>
+            o.type === 'liquidity' &&
+            o.status === 'Active' &&
+            o.poolId === order.poolId &&
+            o.expiry > Date.now()
+        );
 
-        if (txHash) {
-            console.log(`✅ Order executed! Hash: ${txHash}`);
-            await this.markAsSettled(order, txHash);
+        if (poolLiquidity.length > 0) {
+            console.log(`   🌊 Found ${poolLiquidity.length} Ghost Liquidity matching intents. Bundling JIT...`);
+        }
+
+        // Pass to Executor with bundled liquidity
+        const result = await this.executor.executeOrder(order, poolLiquidity);
+
+        if (result && result.hash) {
+            console.log(`✅ Order executed! Hash: ${result.hash}`);
+
+            // Only settle intents that the executor confirms were valid and included
+            for (const id of result.settledIds) {
+                const liqIntent = poolLiquidity.find(l => l.id === id);
+                if (liqIntent) {
+                    await this.markAsSettled(liqIntent, result.hash);
+                } else if (id === order.id) {
+                    await this.markAsSettled(order, result.hash);
+                }
+            }
         }
     }
 

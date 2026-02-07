@@ -11,7 +11,7 @@ const WETH = "0x4200000000000000000000000000000000000006";
 const eiETH = "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
 const EXECUTOR = "0x1318783e1b61d173315d566003836dc850B144C2";
 const MANAGER = CONFIG.CONTRACTS.POOL_MANAGER;
-const HOOK_ADDRESS = "0x1244359060e16429A5568085012606c0213020c8";
+const HOOK_ADDRESS = "0x85bF7A29023EA1f853045fC848b31C9bE4Eaa0C8";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
 const account = privateKeyToAccount(PRIVATE_KEY);
@@ -67,7 +67,7 @@ async function run() {
         currency0: token0 as `0x${string}`,
         currency1: token1 as `0x${string}`,
         fee: 3000,
-        tickSpacing: 200,
+        tickSpacing: 60,
         hooks: HOOK_ADDRESS as `0x${string}`
     };
 
