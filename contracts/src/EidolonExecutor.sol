@@ -79,7 +79,8 @@ contract EidolonExecutor {
         if (currency.isAddressZero()) {
             poolManager.settle{value: amount}();
         } else {
-            // Funds transferred by Hook
+            // Pull funds from swapper and settle
+            ERC20(Currency.unwrap(currency)).safeTransferFrom(payer, address(poolManager), amount);
             poolManager.settle();
         }
     }

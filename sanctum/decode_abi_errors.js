@@ -14,9 +14,7 @@ artifact.abi.forEach(item => {
 
         if (['0x9e4d7cc7', '0x90bfb865', '0x486aa307'].includes(selector)) {
             console.log(`MATCH: ${selector} -> ${signature}`);
-        } else {
-            // Uncomment to see all
-            // console.log(`${selector} -> ${signature}`);
         }
+        console.log(`${selector} -> ${signature}`);
     }
 });
