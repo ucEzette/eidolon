@@ -7,11 +7,11 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // --- CONSTANTS ---
-const MOCK_USDC = "0x6049396B200058e95AD2C5A4354458ee6d25EAC8";
 const WETH = "0x4200000000000000000000000000000000000006";
+const eiETH = "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6";
 const EXECUTOR = "0x1318783e1b61d173315d566003836dc850B144C2";
 const MANAGER = CONFIG.CONTRACTS.POOL_MANAGER;
-const HOOK = "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8";
+const HOOK_ADDRESS = "0x1244359060e16429A5568085012606c0213020c8";
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY as `0x${string}`;
 const account = privateKeyToAccount(PRIVATE_KEY);
@@ -51,50 +51,50 @@ const MIN_SQRT_PRICE = 4295128739n;
 const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n;
 
 async function run() {
-    console.log("Running Simple Swap Isolation Test...");
+    console.log("Running End-to-End Swap Verification...");
     console.log("Executor:", EXECUTOR);
-    console.log("MockUSDC:", MOCK_USDC);
+    console.log("Hook:", HOOK_ADDRESS);
 
     // 1. Sort Tokens
-    const token0 = MOCK_USDC.toLowerCase() < WETH.toLowerCase() ? MOCK_USDC : WETH;
-    const token1 = MOCK_USDC.toLowerCase() < WETH.toLowerCase() ? WETH : MOCK_USDC;
-    const isUSDCToken0 = token0.toLowerCase() === MOCK_USDC.toLowerCase();
+    const token0 = WETH.toLowerCase() < eiETH.toLowerCase() ? WETH : eiETH;
+    const token1 = WETH.toLowerCase() < eiETH.toLowerCase() ? eiETH : WETH;
+    const isWETHToken0 = token0.toLowerCase() === WETH.toLowerCase();
 
-    console.log(`Token0: ${token0} (${isUSDCToken0 ? "USDC" : "WETH"})`);
-    console.log(`Token1: ${token1} (${!isUSDCToken0 ? "USDC" : "WETH"})`);
+    console.log(`Token0: ${token0} (${isWETHToken0 ? "WETH" : "eiETH"})`);
+    console.log(`Token1: ${token1} (${!isWETHToken0 ? "WETH" : "eiETH"})`);
 
     const key: PoolKey = {
         currency0: token0 as `0x${string}`,
         currency1: token1 as `0x${string}`,
         fee: 3000,
-        tickSpacing: 60,
-        hooks: HOOK as `0x${string}`
+        tickSpacing: 200,
+        hooks: HOOK_ADDRESS as `0x${string}`
     };
 
     // 2. Fund PoolManager
-    // We want to sell USDC -> WETH.
-    // Amount: 10 USDC (10 * 10^6)
-    const amountIn = parseUnits("10", 6);
-    console.log(`Funding PoolManager with ${amountIn} USDC...`);
+    // We want to sell WETH -> eiETH.
+    // Amount: 0.001 WETH (10^15 wei)
+    const amountIn = parseUnits("0.001", 18);
+    console.log(`Funding PoolManager with ${amountIn} WETH...`);
 
     // START SYNC
     try {
-        console.log("Syncing MockUSDC first...");
+        console.log("Syncing WETH first...");
         const hashSync = await client.writeContract({
             address: MANAGER as `0x${string}`,
             abi: MANAGER_ABI,
             functionName: 'sync',
-            args: [MOCK_USDC as `0x${string}`]
+            args: [WETH as `0x${string}`]
         });
         await client.waitForTransactionReceipt({ hash: hashSync });
         console.log("Synced.");
-    } catch (e) {
-        console.warn("Sync failed (maybe not needed?):", e);
+    } catch (e: any) {
+        console.warn("Sync failed (maybe not needed?):", e.message);
     }
     // END SYNC
 
     const hash1 = await client.writeContract({
-        address: MOCK_USDC as `0x${string}`,
+        address: WETH as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'transfer',
         args: [MANAGER as `0x${string}`, amountIn]
@@ -104,9 +104,9 @@ async function run() {
     console.log("PoolManager funded.");
 
     // 3. Execute Swap
-    // zeroForOne: If USDC is token0, we sell token0 -> zeroForOne = true.
-    // If USDC is token1, we sell token1 -> zeroForOne = false.
-    const zeroForOne = isUSDCToken0;
+    // zeroForOne: If WETH is token0, we sell token0 -> zeroForOne = true.
+    // If WETH is token1, we sell token1 -> zeroForOne = false.
+    const zeroForOne = isWETHToken0;
 
     console.log(`Executing Swap: ${zeroForOne ? "0->1" : "1->0"}...`);
 
@@ -124,7 +124,7 @@ async function run() {
             args: [
                 key,
                 params,
-                "0x", // EMPTY HOOK DATA -> Bypass JIT/Permit2
+                "0x", // EMPTY HOOK DATA -> Bypass JIT/Permit2 for now just to test hook baseline
                 account.address
             ]
         });
@@ -136,8 +136,8 @@ async function run() {
         } else {
             console.log("❌ SWAP FAILED (Reverted)");
         }
-    } catch (e) {
-        console.error("Executor Call Failed:", e);
+    } catch (e: any) {
+        console.error("Executor Call Failed:", e.message);
     }
 }
 
