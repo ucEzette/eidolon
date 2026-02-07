@@ -17,6 +17,33 @@ import { unichainSepolia } from 'viem/chains';
 import { CONFIG } from './config';
 import { GhostPosition } from './monitor';
 
+// RPC Resilience: Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_BACKOFF = 1000; // 1 second
+
+async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
+    let lastError: any;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+            return await fn();
+        } catch (error: any) {
+            lastError = error;
+            const isRetryable =
+                error.message?.includes("block is out of range") ||
+                error.message?.includes("too many requests") ||
+                error.message?.includes("request timeout") ||
+                error.code === -32019;
+
+            if (!isRetryable || attempt === MAX_RETRIES - 1) break;
+
+            const backoff = INITIAL_BACKOFF * Math.pow(2, attempt);
+            console.warn(`⚠️  [${label}] RPC Error: ${error.message}. Retrying in ${backoff}ms... (Attempt ${attempt + 1}/${MAX_RETRIES})`);
+            await new Promise(resolve => setTimeout(resolve, backoff));
+        }
+    }
+    throw lastError;
+}
+
 // ABI for EidolonExecutor
 const EXECUTOR_ABI = [
     {
@@ -67,6 +94,20 @@ const EXECUTOR_ABI = [
     }
 ];
 
+// ABI for checking if a permit nonce was used on-chain
+const HOOK_ABI = [
+    {
+        name: 'isPermitUsed',
+        type: 'function',
+        stateMutability: 'view',
+        inputs: [
+            { name: 'provider', type: 'address' },
+            { name: 'nonce', type: 'uint256' }
+        ],
+        outputs: [{ name: '', type: 'bool' }]
+    }
+];
+
 export class Executor {
     private client;
     private account;
@@ -87,66 +128,40 @@ export class Executor {
         });
     }
 
-    async executeOrder(order: GhostPosition) {
+    async executeOrder(order: GhostPosition, bundledLiquidity: GhostPosition[] = []) {
         if (!CONFIG.CONTRACTS.EIDOLON_EXECUTOR || CONFIG.CONTRACTS.EIDOLON_EXECUTOR === "0x0000000000000000000000000000000000000000") {
             console.warn("⚠️  EIDOLON_EXECUTOR address not set! Skipping on-chain execution.");
             return false;
         }
 
-        console.log(`⚡ Executor: Preparing settlement for ${order.id}...`);
+        console.log(`⚡ Executor: Preparing settlement for swap trigger ${order.id}...`);
+        if (bundledLiquidity.length > 0) {
+            console.log(`   🌊 Bundling ${bundledLiquidity.length} JIT liquidity intents...`);
+        }
 
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-        // WETH Address on Unichain Sepolia
         const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
 
         const normalize = (addr: string) => {
             if (!addr) return WETH_ADDRESS;
             const clean = addr.trim();
-
-            // FAIL FAST on truncated addresses
-            if (clean.includes("...")) {
-                console.error(`❌ CRITICAL: Truncated address detected in data: "${clean}"`);
-                throw new Error(`Data Contamination: Address "${clean}" is truncated.`);
-            }
-
-            // Check if already a hex address
+            if (clean.includes("...")) throw new Error(`Data Contamination: Address "${clean}" is truncated.`);
             if (clean.startsWith('0x') && clean.length === 42) return clean as `0x${string}`;
-
-            // 1. Check for symbol resolution (e.g. "eiETH", "ETH")
             const tokenSymbol = clean.toUpperCase();
-            const tokenEntry = Object.entries(CONFIG.TOKENS).find(
-                ([symbol]) => symbol.toUpperCase() === tokenSymbol
-            );
-
+            const tokenEntry = Object.entries(CONFIG.TOKENS).find(([symbol]) => symbol.toUpperCase() === tokenSymbol);
             if (tokenEntry) {
                 const resolved = tokenEntry[1].address;
-                const finalAddr = (resolved === ZERO_ADDRESS ? WETH_ADDRESS : resolved) as `0x${string}`;
-                console.log(`   💎 Resolved ${clean} -> ${finalAddr}`);
-                return finalAddr;
+                return (resolved === ZERO_ADDRESS ? WETH_ADDRESS : resolved) as `0x${string}`;
             }
-
-            // 2. Manual fallbacks for known test symbols (Safety net)
-            if (tokenSymbol === "EIETH") {
-                console.log(`   💎 Resolved eiETH -> 0xe02eb159eb92dd0388ecdb33d0db0f8831091be6 (Fallback)`);
-                return "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" as `0x${string}`;
-            }
-
             const lower = clean.toLowerCase();
             if (lower === "eth" || lower === ZERO_ADDRESS) return WETH_ADDRESS;
-            if (lower === "weth") return WETH_ADDRESS;
-
-            console.warn(`   ⚠️  Failed to resolve token: ${clean}. Using as-is.`);
             return clean as `0x${string}`;
         };
 
         const getDecimals = (addr: string) => {
             const lowerAddr = addr.toLowerCase();
-            const token = Object.values(CONFIG.TOKENS).find(
-                t => t.address.toLowerCase() === lowerAddr
-            );
-            if (token) return token.decimals;
-            if (lowerAddr === "0x31d0220469e10c4e71834a79b1f276d740d3768f") return 6; // USDC
-            return 18;
+            const token = Object.values(CONFIG.TOKENS).find(t => t.address.toLowerCase() === lowerAddr);
+            return token ? token.decimals : 18;
         };
 
         const tokenA = normalize(order.tokenA);
@@ -155,18 +170,28 @@ export class Executor {
         const decimalsB = getDecimals(tokenB);
 
         try {
-            // 1. Construct Witness Struct (Must match WitnessLib)
-            const witness = {
-                poolId: order.poolId as `0x${string}`,
-                hook: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`
-            };
+            const hookAddress = (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`;
 
-            // VERIFY SIGNATURE LOCALLY
-            console.log("\n🔍 STARTING LOCAL VERIFICATION 🔍\n");
-            let isValid = false;
-            try {
-                isValid = await verifyTypedData({
-                    address: order.provider as `0x${string}`,
+            // Collect all intents: the trigger swap permit (if it exists) + all bundled liquidity
+            // NOTE: Usually a swap trigger might NOT need a permit if it's a direct swap,
+            // but in Eidolon, the bot triggers a swap *behalf of* the user, so it NEEDS the user's permit.
+            const allIntents = [order, ...bundledLiquidity];
+            const permits: any[] = [];
+            const signatures: `0x${string}`[] = [];
+            const witnesses: any[] = [];
+
+            console.log("\n🔍 STARTING LOCAL VERIFICATION FOR ALL INTENTS 🔍\n");
+
+            for (const intent of allIntents) {
+                const iTokenA = normalize(intent.tokenA);
+                const iDecimalsA = getDecimals(iTokenA);
+                const iWitness = {
+                    poolId: intent.poolId as `0x${string}`,
+                    hook: (intent.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
+                };
+
+                const isValid = await verifyTypedData({
+                    address: intent.provider as `0x${string}`,
                     domain: {
                         name: 'Permit2',
                         chainId: 1301,
@@ -192,45 +217,85 @@ export class Executor {
                     primaryType: 'PermitWitnessTransferFrom',
                     message: {
                         permitted: {
-                            token: tokenA as `0x${string}`,
-                            amount: parseUnits(order.amountA.toString(), decimalsA)
+                            token: iTokenA as `0x${string}`,
+                            amount: parseUnits(intent.amountA.toString(), iDecimalsA)
                         },
-                        spender: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`,
-                        nonce: BigInt(order.nonce),
-                        deadline: BigInt(Math.floor(order.expiry / 1000)),
-                        witness: witness
+                        spender: iWitness.hook,
+                        nonce: BigInt(intent.nonce),
+                        deadline: BigInt(Math.floor(intent.expiry / 1000)),
+                        witness: iWitness
                     },
-                    signature: order.signature as Hex
+                    signature: intent.signature as Hex
                 });
-            } catch (err) {
-                console.error("CRITICAL: Verification crashed:", err);
-                throw new Error("Verification Logic Failed");
-            }
 
-            console.log(`   🔍 Result: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
+                console.log(`   🔍 Intent [${intent.id.slice(0, 8)}] Result: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
 
-            if (!isValid) {
-                const currentHook = CONFIG.CONTRACTS.EIDOLON_HOOK.toLowerCase();
-                const intentHook = witness.hook.toLowerCase();
-                if (currentHook !== intentHook) {
-                    console.warn(`   ⚠️  WARNING: Intent signed for a LEGACY hook address (${intentHook})!`);
-                    console.warn(`      This intent cannot be settled on the current hook (${currentHook}).`);
-                    console.warn(`      User needs to refresh their UI and sign a new intent.`);
+                if (!isValid) {
+                    try {
+                        const recovered = await import('viem').then(m => m.recoverTypedDataAddress({
+                            domain: {
+                                name: 'Permit2',
+                                chainId: 1301,
+                                verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+                            },
+                            types: {
+                                PermitWitnessTransferFrom: [
+                                    { name: "permitted", type: "TokenPermissions" },
+                                    { name: "spender", type: "address" },
+                                    { name: "nonce", type: "uint256" },
+                                    { name: "deadline", type: "uint256" },
+                                    { name: "witness", type: "WitnessData" }
+                                ],
+                                TokenPermissions: [
+                                    { name: "token", type: "address" },
+                                    { name: "amount", type: "uint256" }
+                                ],
+                                WitnessData: [
+                                    { name: "poolId", type: "bytes32" },
+                                    { name: "hook", type: "address" }
+                                ]
+                            },
+                            primaryType: 'PermitWitnessTransferFrom',
+                            message: {
+                                permitted: {
+                                    token: iTokenA as `0x${string}`,
+                                    amount: parseUnits(intent.amountA.toString(), iDecimalsA)
+                                },
+                                spender: iWitness.hook,
+                                nonce: BigInt(intent.nonce),
+                                deadline: BigInt(Math.floor(intent.expiry / 1000)),
+                                witness: iWitness
+                            },
+                            signature: intent.signature as Hex
+                        }));
+                        console.log(`      ⚠️  [DEBUG] Recovered: ${recovered} (Expected: ${intent.provider})`);
+                    } catch (e) {
+                        console.log(`      ⚠️  [DEBUG] Recovery failed: ${e}`);
+                    }
+                }
+
+                if (isValid) {
+                    permits.push({
+                        id: intent.id, // Keep track of ID for settlement
+                        provider: intent.provider as `0x${string}`,
+                        currency: iTokenA as `0x${string}`,
+                        amount: parseUnits(intent.amountA, iDecimalsA),
+                        poolId: intent.poolId as `0x${string}`,
+                        deadline: BigInt(Math.floor(intent.expiry / 1000)),
+                        nonce: BigInt(intent.nonce),
+                        isDualSided: intent.liquidityMode === 'dual-sided'
+                    });
+                    signatures.push(intent.signature as `0x${string}`);
+                    witnesses.push(iWitness);
                 } else {
-                    console.warn("   ⚠️  WARNING: Local signature verification failed. On-chain execution will likely revert.");
+                    console.warn(`   ⚠️  Intent [${intent.id.slice(0, 8)}] failed verification. Skipping.`);
                 }
             }
 
-            // 2. Encode Permit Data
-            const permit = {
-                provider: order.provider as `0x${string}`,
-                currency: tokenA as `0x${string}`,
-                amount: parseUnits(order.amountA.toString(), decimalsA), // Handles correct decimals
-                poolId: order.poolId as `0x${string}`, // Added poolId field
-                deadline: BigInt(Math.floor(order.expiry / 1000)),
-                nonce: BigInt(order.nonce),
-                isDualSided: order.liquidityMode === 'dual-sided'
-            };
+            if (permits.length === 0) {
+                console.error("❌ CRITICAL: No valid permits found for execution.");
+                return null;
+            }
 
             const hookData = encodeAbiParameters(
                 [
@@ -258,36 +323,32 @@ export class Executor {
                     }
                 ],
                 [
-                    [permit],
-                    [order.signature as `0x${string}`],
-                    [witness]
+                    // EidolonHook.sol uses uint256 for amount in GhostPermit struct
+                    permits.map(p => ({ ...p, amount: BigInt(p.amount) })),
+                    signatures,
+                    witnesses
                 ]
             );
 
             // 3. Prepare PoolKey
-            const currency0 = tokenA.toLowerCase() < tokenB.toLowerCase() ? tokenA : tokenB;
-            const currency1 = tokenA.toLowerCase() < tokenB.toLowerCase() ? tokenB : tokenA;
+            const [currency0, currency1] = tokenA.toLowerCase() < tokenB.toLowerCase() ? [tokenA, tokenB] : [tokenB, tokenA];
 
             const poolKey = {
                 currency0: currency0 as `0x${string}`,
                 currency1: currency1 as `0x${string}`,
                 fee: order.fee || CONFIG.POOLS.canonical.fee,
                 tickSpacing: order.tickSpacing || CONFIG.POOLS.canonical.tickSpacing,
-                hooks: (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
+                hooks: hookAddress
             };
 
             // 4. Prepare Swap Params
-            // JIT Logic: The Provider (bot) provides tokenA.
-            // This means the Swapper is selling tokenB and receiving tokenA.
+            // The swapper (intent provider) is selling tokenA and buying tokenB.
+            // Univ4: zeroForOne = true means swapping from currency0 to currency1 (selling currency0).
+            const zeroForOne = tokenA.toLowerCase() === currency0.toLowerCase();
 
-            // If Swapper sells tokenB:
-            // If tokenB is currency0, zeroForOne = true (0 -> 1).
-            // If tokenB is currency1, zeroForOne = false (1 -> 0).
-            const isSwapperSellingCurrency0 = tokenB.toLowerCase() === currency0.toLowerCase();
-            const zeroForOne = isSwapperSellingCurrency0;
-
-            // The amount specified for the swap is the SWAPPER's input (tokenB).
-            const amountSpecified = -parseUnits(order.amountB.toString(), decimalsB);
+            // The amount specified for the swap is the user's input (tokenA).
+            // Positive value = Exact Input swap.
+            const amountSpecified = parseUnits(order.amountA.toString(), decimalsA);
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
 
@@ -296,7 +357,7 @@ export class Executor {
             // Univ4 requires currency0 < currency1 and non-native tokens (standardized to WETH)
             const fee = order.fee || CONFIG.POOLS.canonical.fee;
             const tickSpacing = order.tickSpacing || CONFIG.POOLS.canonical.tickSpacing;
-            const hooks = (order.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`;
+            const hooks = hookAddress;
 
             // Helper to get local PoolID (matches Frontend and Univ4 standard)
             const getLocalPoolId = (c0: string, c1: string, f: number, ts: number, h: string) => {
@@ -321,10 +382,10 @@ export class Executor {
 
             try {
                 try {
-                    const [bn, chainId] = await Promise.all([
+                    const [bn, chainId] = await withRetry(() => Promise.all([
                         this.client.getBlockNumber(),
                         this.client.getChainId()
-                    ]);
+                    ]), "StateVerification_Basics");
                     console.log(`\n   🔍 [DEBUG] Block: ${bn}, ChainID: ${chainId}`);
                     console.log(`   🔍 [DEBUG] RPC: ${CONFIG.RPC_URL}`);
                 } catch (e) { }
@@ -335,7 +396,7 @@ export class Executor {
 
                 // Try getSlot0 as well for debug
                 try {
-                    const slot0 = await this.client.readContract({
+                    const slot0 = await withRetry(() => this.client.readContract({
                         address: CONFIG.CONTRACTS.POOL_MANAGER as `0x${string}`,
                         abi: [
                             {
@@ -353,7 +414,7 @@ export class Executor {
                         ],
                         functionName: 'getSlot0',
                         args: [poolId]
-                    }) as unknown as any[];
+                    }), "PoolState_GetSlot0") as unknown as any[];
                     console.log(`   🔍 [DEBUG] getSlot0 success! Price: ${slot0[0]}`);
                 } catch (e: any) {
                     console.log(`   🔍 [DEBUG] getSlot0 failed: ${e.message.slice(0, 50)}...`);
@@ -369,7 +430,7 @@ export class Executor {
                 const storageSlot = keccak256(mappingKey);
                 console.log(`   🔍 Resolved Storage Slot: ${storageSlot}`);
 
-                const slotData = await this.client.readContract({
+                const slotData = await withRetry(() => this.client.readContract({
                     address: CONFIG.CONTRACTS.POOL_MANAGER as `0x${string}`,
                     abi: [
                         {
@@ -382,7 +443,7 @@ export class Executor {
                     ],
                     functionName: 'extsload',
                     args: [storageSlot]
-                }) as `0x${string}`;
+                }), "PoolState_ExtSload") as `0x${string}`;
                 console.log(`   🔍 Debug Raw Slot Data: ${slotData}`);
 
                 const val = BigInt(slotData);
@@ -436,7 +497,7 @@ export class Executor {
             console.log(`   🔄 Swap Direction: ${zeroForOne ? "ZeroForOne" : "OneForZero"} (Selling ${tokenA})`);
 
             // REAL TRANSACTION
-            const hash = await this.wallet.writeContract({
+            const hash = await withRetry(() => this.wallet.writeContract({
                 address: CONFIG.CONTRACTS.EIDOLON_EXECUTOR as `0x${string}`,
                 abi: EXECUTOR_ABI,
                 functionName: 'execute',
@@ -451,12 +512,12 @@ export class Executor {
                     hookData,
                     order.provider as `0x${string}` // recipient
                 ]
-            });
+            }), "ExecuteSwap_Tx");
             console.log(`   🚀 Transaction Submitted: ${hash}`);
 
             // Wait for confirmation
             console.log("   ⏳ Waiting for transaction receipt...");
-            const receipt = await this.client.waitForTransactionReceipt({ hash });
+            const receipt = await withRetry(() => this.client.waitForTransactionReceipt({ hash }), "ExecuteSwap_Receipt");
 
             if (receipt.status === 'reverted') {
                 console.error(`   ❌ Transaction REVERTED: ${hash}`);
@@ -464,7 +525,33 @@ export class Executor {
             }
 
             console.log(`   ✅ Transaction SUCCESSFUL: ${hash}`);
-            return hash;
+
+            // CRITICAL: Verify on-chain which permits were actually consumed
+            // The hook can silently skip permits for validation failures
+            const actuallySettledIds: string[] = [];
+            for (const p of permits) {
+                try {
+                    const isUsed = await withRetry(() => this.client.readContract({
+                        address: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`,
+                        abi: HOOK_ABI,
+                        functionName: 'isPermitUsed',
+                        args: [p.provider, p.nonce]
+                    }), `CheckNonce_${p.id.slice(0, 8)}`);
+                    if (isUsed) {
+                        actuallySettledIds.push(p.id);
+                        console.log(`   ✅ Permit [${p.id.slice(0, 8)}] nonce confirmed used on-chain`);
+                    } else {
+                        console.warn(`   ⚠️  Permit [${p.id.slice(0, 8)}] nonce NOT used on-chain (skipped by hook)`);
+                    }
+                } catch (e) {
+                    console.error(`   ❌ Failed to check nonce for [${p.id.slice(0, 8)}]:`, e);
+                }
+            }
+
+            return {
+                hash,
+                settledIds: actuallySettledIds
+            };
 
         } catch (error: any) {
             console.error("Executor Failed:", error.message || error);
