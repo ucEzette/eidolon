@@ -38,7 +38,7 @@ function getPoolStateSlot(poolId: Hex): Hex {
 
 const WETH = "0x4200000000000000000000000000000000000006" as Hex;
 const USDC = "0x31d0220469e10c4E71834a79b1f276d740d3768F" as Hex;
-const hook = "0x1244359060e16429A5568085012606c0213020c8" as Hex;
+const hook = "0x85bF7A29023EA1f853045fC848b31C9bE4Eaa0C8" as Hex;
 
 const [c0, c1] = WETH.toLowerCase() < USDC.toLowerCase() ? [WETH, USDC] : [USDC, WETH];
 
