@@ -5,9 +5,9 @@ export const CONFIG = {
     RPC_URL: process.env.RPC_URL || "https://sepolia.unichain.org",
     PRIVATE_KEY: process.env.PRIVATE_KEY!,
     CONTRACTS: {
-        EIDOLON_HOOK: "0xa5CC49688cB5026977a2A501cd7dD3daB2C580c8",
-        EIDOLON_EXECUTOR: "0x1318783e1b61d173315d566003836dc850B144C2", // Hardcoded to prevent env pollution
-        POOL_MANAGER: "0x00B036B58a818B1BC34d502D3fE730Db729e62AC"
+        EIDOLON_HOOK: '0x85bF7A29023EA1f853045fC848b31C9bE4Eaa0C8' as `0x${string}`,
+        EIDOLON_EXECUTOR: '0x1318783e1b61d173315d566003836dc850B144C2' as `0x${string}`,
+        POOL_MANAGER: '0x00B036B58a818B1BC34d502D3fE730Db729e62AC' as `0x${string}`
     },
     POOLS: {
         canonical: {

@@ -210,7 +210,15 @@ export class Executor {
             console.log(`   🔍 Result: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
 
             if (!isValid) {
-                console.warn("   ⚠️ WARNING: Local signature verification failed. On-chain execution will likely revert.");
+                const currentHook = CONFIG.CONTRACTS.EIDOLON_HOOK.toLowerCase();
+                const intentHook = witness.hook.toLowerCase();
+                if (currentHook !== intentHook) {
+                    console.warn(`   ⚠️  WARNING: Intent signed for a LEGACY hook address (${intentHook})!`);
+                    console.warn(`      This intent cannot be settled on the current hook (${currentHook}).`);
+                    console.warn(`      User needs to refresh their UI and sign a new intent.`);
+                } else {
+                    console.warn("   ⚠️  WARNING: Local signature verification failed. On-chain execution will likely revert.");
+                }
             }
 
             // 2. Encode Permit Data
@@ -269,8 +277,17 @@ export class Executor {
             };
 
             // 4. Prepare Swap Params
-            const zeroForOne = tokenA.toLowerCase() === currency0.toLowerCase();
-            const amountSpecified = -parseUnits(order.amountA.toString(), decimalsA);
+            // JIT Logic: The Provider (bot) provides tokenA.
+            // This means the Swapper is selling tokenB and receiving tokenA.
+
+            // If Swapper sells tokenB:
+            // If tokenB is currency0, zeroForOne = true (0 -> 1).
+            // If tokenB is currency1, zeroForOne = false (1 -> 0).
+            const isSwapperSellingCurrency0 = tokenB.toLowerCase() === currency0.toLowerCase();
+            const zeroForOne = isSwapperSellingCurrency0;
+
+            // The amount specified for the swap is the SWAPPER's input (tokenB).
+            const amountSpecified = -parseUnits(order.amountB.toString(), decimalsB);
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
 
@@ -303,9 +320,44 @@ export class Executor {
             let limitX96 = zeroForOne ? 4295128740n : 1461446703485210103287273052203988822378723970341n; // Default Fallback
 
             try {
+                try {
+                    const [bn, chainId] = await Promise.all([
+                        this.client.getBlockNumber(),
+                        this.client.getChainId()
+                    ]);
+                    console.log(`\n   🔍 [DEBUG] Block: ${bn}, ChainID: ${chainId}`);
+                    console.log(`   🔍 [DEBUG] RPC: ${CONFIG.RPC_URL}`);
+                } catch (e) { }
+
                 // ---------------------------------------------------------
                 // FIX: Use extsload (Slot 6) because getSlot0 is broken
                 // ---------------------------------------------------------
+
+                // Try getSlot0 as well for debug
+                try {
+                    const slot0 = await this.client.readContract({
+                        address: CONFIG.CONTRACTS.POOL_MANAGER as `0x${string}`,
+                        abi: [
+                            {
+                                name: 'getSlot0',
+                                type: 'function',
+                                stateMutability: 'view',
+                                inputs: [{ name: 'id', type: 'bytes32' }],
+                                outputs: [
+                                    { name: 'sqrtPriceX96', type: 'uint160' },
+                                    { name: 'tick', type: 'int24' },
+                                    { name: 'protocolFee', type: 'uint24' },
+                                    { name: 'lpFee', type: 'uint24' }
+                                ]
+                            }
+                        ],
+                        functionName: 'getSlot0',
+                        args: [poolId]
+                    }) as unknown as any[];
+                    console.log(`   🔍 [DEBUG] getSlot0 success! Price: ${slot0[0]}`);
+                } catch (e: any) {
+                    console.log(`   🔍 [DEBUG] getSlot0 failed: ${e.message.slice(0, 50)}...`);
+                }
 
                 // Calculate Storage Slot for _pools[poolId].slot0
                 // Mapping is at slot 6
@@ -345,29 +397,32 @@ export class Executor {
 
                 if (price === 0n) {
                     console.error("❌ CRITICAL: Pool is NOT INITIALIZED (Price=0). Swap will fail.");
-                    return null;
+                    // return null; // Let's try to proceed ANYWAY in debug mode
+                    console.log("   ⚠️  [DEBUG] Overriding initialization check. Attempting swap anyway...");
                 }
 
                 const MIN_SQRT_PRICE = 4295128739n;
                 const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n;
 
-                if (zeroForOne && price <= MIN_SQRT_PRICE + 100n) {
+                if (zeroForOne && price <= MIN_SQRT_PRICE + 100n && price !== 0n) {
                     console.error("❌ CRITICAL: Pool Price at MINIMUM. Liquidity likely empty/drained.");
                     return null;
                 }
-                if (!zeroForOne && price >= MAX_SQRT_PRICE - 100n) {
+                if (!zeroForOne && price >= MAX_SQRT_PRICE - 100n && price !== 0n) {
                     console.error("❌ CRITICAL: Pool Price at MAXIMUM. Liquidity likely empty/drained.");
                     return null;
                 }
 
                 // DYNAMIC SLIPPAGE
                 // 20% Slippage Tolerance to prevent 0x7c9c6e8f
-                if (zeroForOne) {
-                    limitX96 = (price * 8n) / 10n; // Target 80% of current price
-                    if (limitX96 <= MIN_SQRT_PRICE) limitX96 = MIN_SQRT_PRICE + 1n;
-                } else {
-                    limitX96 = (price * 12n) / 10n; // Target 120% of current price
-                    if (limitX96 >= MAX_SQRT_PRICE) limitX96 = MAX_SQRT_PRICE - 1n;
+                if (price > 0n) {
+                    if (zeroForOne) {
+                        limitX96 = (price * 8n) / 10n; // Target 80% of current price
+                        if (limitX96 <= MIN_SQRT_PRICE) limitX96 = MIN_SQRT_PRICE + 1n;
+                    } else {
+                        limitX96 = (price * 12n) / 10n; // Target 120% of current price
+                        if (limitX96 >= MAX_SQRT_PRICE) limitX96 = MAX_SQRT_PRICE - 1n;
+                    }
                 }
                 console.log(`   🛡️ Dynamic Limit Applied: ${limitX96.toString()}`);
 
@@ -413,6 +468,8 @@ export class Executor {
 
         } catch (error: any) {
             console.error("Executor Failed:", error.message || error);
+            if (error.data) console.error("   DEBUG Revert Data:", error.data);
+            if (error.cause) console.error("   DEBUG Cause:", error.cause);
             return null;
         }
     }

@@ -24,6 +24,7 @@ const POOL_MANAGER_ABI = parseAbi([
     "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
     "function extsload(bytes32 slot) external view returns (bytes32 value)",
     "function extsload(bytes32[] slots) external view returns (bytes32[] values)",
+    "function getSlot0(bytes32 id) external view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
     "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes testSettings) external payable returns (int256 delta)"
 ]);
 
@@ -76,8 +77,13 @@ const OFFICIAL_POOL_KEYS = [
 ];
 
 // Dynamic Pool Discovery Constants
-const POTENTIAL_FEES = [500, 3000, 10000];
-const POTENTIAL_TICKS = [10, 60, 200];
+const POTENTIAL_TIERS = [
+    { fee: 100, tickSpacing: 60 },
+    { fee: 500, tickSpacing: 10 },
+    { fee: 3000, tickSpacing: 60 },
+    { fee: 3000, tickSpacing: 200 },
+    { fee: 10000, tickSpacing: 200 }
+];
 
 export function PoolManager() {
     const { address, isConnected } = useAccount();
@@ -147,12 +153,12 @@ export function PoolManager() {
 
     // Check which pool config is actually initialized
     const poolVariants = useMemo(() => {
-        return POTENTIAL_FEES.map((fee, i) => ({
+        return POTENTIAL_TIERS.map((tier) => ({
             ...poolConfig,
-            fee,
-            tickSpacing: POTENTIAL_TICKS[i] // Simply mapping indices 1:1 for now (3000->60, 10000->200)
+            fee: tier.fee,
+            tickSpacing: tier.tickSpacing
         }));
-    }, [poolConfig]);
+    }, [poolConfig.token0, poolConfig.token1, poolConfig.hooks]);
 
     const poolVariantIds = useMemo(() => {
         return poolVariants.map(variant => getPoolId(
@@ -164,21 +170,53 @@ export function PoolManager() {
         ));
     }, [poolVariants]);
 
-    // Batch fetch state for all variants (Using extsload at Slot 6 because getSlot0 is broken)
-    const { } = useReadContract({
-        address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
-        abi: POOL_MANAGER_ABI,
-        functionName: 'extsload',
-        args: [poolVariantIds.map(pid => getPoolStateSlot(pid) || "0x0000000000000000000000000000000000000000000000000000000000000000")],
-        chainId: unichainSepolia.id,
+    // Batch fetch Slot0 for all variants to see which is active
+    const { data: variantsData } = useReadContracts({
+        contracts: poolVariantIds.map(id => ({
+            address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
+            abi: POOL_MANAGER_ABI,
+            functionName: 'getSlot0',
+            args: [id as `0x${string}`]
+        })),
         query: {
-            enabled: !isWrongNetwork,
+            enabled: !isWrongNetwork && mounted,
             refetchInterval: 10000
         }
     });
 
-    // Auto-Select Logic Removed to allow manual override
-    // useEffect(() => { ... })
+    // Auto-Select Logic: If current config is uninitialized but another tier is, switch to it
+    useEffect(() => {
+        if (!variantsData || variantsData.length === 0) return;
+
+        const data = variantsData as any[];
+
+        // 1. Check if current tier is active
+        const currentIndex = POTENTIAL_TIERS.findIndex(
+            t => t.fee === poolConfig.fee && t.tickSpacing === poolConfig.tickSpacing
+        );
+
+        if (currentIndex === -1) return;
+
+        const currentResult = data[currentIndex];
+        const currentActive = currentResult?.status === 'success' && currentResult.result && (currentResult.result as any)[0] > 0n;
+
+        if (!currentActive) {
+            // 2. Look for another active tier
+            const activeTierIndex = data.findIndex(
+                v => v && v.status === 'success' && v.result && (v.result as any)[0] > 0n
+            );
+
+            if (activeTierIndex !== -1) {
+                const bestTier = POTENTIAL_TIERS[activeTierIndex];
+                console.log(`🚀 Auto-Routing: Switching from ${poolConfig.fee}/${poolConfig.tickSpacing} to initialized tier ${bestTier.fee}/${bestTier.tickSpacing}`);
+                setPoolConfig(prev => ({
+                    ...prev,
+                    fee: bestTier.fee,
+                    tickSpacing: bestTier.tickSpacing
+                }));
+            }
+        }
+    }, [variantsData, poolConfig.fee, poolConfig.tickSpacing]);
 
     // Current Active Pool ID (derived from auto-updated config)
     const poolId = useMemo(() => {
@@ -250,7 +288,19 @@ export function PoolManager() {
     const decimals0 = poolConfig.token0 === ZERO_ADDRESS ? 18 : (tokenMetadata?.[0]?.result as number || 18);
     const decimals1 = poolConfig.token1 === ZERO_ADDRESS ? 18 : (tokenMetadata?.[1]?.result as number || 18);
 
-    // 4. Read Pool State using extsload (Slot 6) because getSlot0 is broken
+    // 4. Read Pool State using getSlot0 (Preferred) falling back to extsload
+    const { data: slot0Data } = useReadContract({
+        address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
+        abi: POOL_MANAGER_ABI,
+        functionName: 'getSlot0',
+        args: [poolId as `0x${string}`],
+        chainId: unichainSepolia.id,
+        query: {
+            enabled: !!poolId && !isWrongNetwork,
+            refetchInterval: 5000,
+        }
+    });
+
     const poolStateSlot = useMemo(() => {
         return getPoolStateSlot(poolId);
     }, [poolId]);
@@ -262,7 +312,7 @@ export function PoolManager() {
         args: poolStateSlot ? [poolStateSlot] : undefined,
         chainId: unichainSepolia.id, // Explicitly query correct chain
         query: {
-            enabled: !!poolStateSlot && !isWrongNetwork,
+            enabled: !!poolStateSlot && !isWrongNetwork && !slot0Data, // Only if getSlot0 fails or is empty
             refetchInterval: 5000,
             retry: false
         }
@@ -333,26 +383,17 @@ export function PoolManager() {
     const estimatedOutput = useMemo(() => {
         if (!swapAmount || isNaN(Number(swapAmount))) return null;
 
-        const hasGridPool = !!poolStateData;
-
-        // Parse `extsload` data:
-        // Value is a hex string (bytes32). 
-        // Slot0 structure: [tick (24)][protocolFee (24)][lpFee (24)][sqrtPriceX96 (160)]
-        // Lowest 160 bits are sqrtPriceX96.
-        // extsload returns a single value if array length 1? No, logic above sends [slot], returns value.
-        // Wait, ABI: `function extsload(bytes32 slot) external view returns (bytes32 value)`
-        // useReadContract return type depends on ABI.
-
         let sqrtPriceX96 = 0n;
-        if (poolStateData) {
+
+        // Priority 1: getSlot0
+        if (slot0Data) {
+            sqrtPriceX96 = (slot0Data as [bigint, number, number, number])[0];
+        }
+        // Priority 2: extsload fallback
+        else if (poolStateData) {
             const val = hexToBigInt(poolStateData as `0x${string}`);
             sqrtPriceX96 = val & ((1n << 160n) - 1n);
         }
-
-
-
-
-
 
         // HYBRID QUOTER LOGIC:
         // If On-Chain is 0, check Ghost Liquidity OR if we have a manually set Price
@@ -364,9 +405,6 @@ export function PoolManager() {
             const validPrice = price && !isNaN(Number(price));
 
             if (hasSpirits || validPrice) {
-                // If we have spirits but no price, default to 1 (Parity) for estimation 
-                // OR ideally we'd calculate weighted avg price from spirits, but for now 1 is safer than 0.
-                // If user entered price, use that.
                 const virtualPrice = validPrice ? Number(price) : 1;
 
                 try {
@@ -379,14 +417,12 @@ export function PoolManager() {
 
         // Re-evaluate check after potential fallback calculation
         if (sqrtPriceX96 < (1n << 64n)) {
-
             return null;
         }
 
         const amountIn = Number(swapAmount);
 
         // Canonical Sorting to match PoolKey
-        // Use addresses for sorting
         const [c0Decimals, c1Decimals] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
             ? [decimals0, decimals1]
             : [decimals1, decimals0];
@@ -400,28 +436,20 @@ export function PoolManager() {
         }
 
         let out = 0;
-
-        // isInputC0 means "Is the input token the canonical token0?"
         const canonical0Addr = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase() ? poolConfig.token0 : poolConfig.token1;
         const inputAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
         const isInputC0 = inputAddr.toLowerCase() === canonical0Addr.toLowerCase();
-
-
 
         if (isInputC0) {
             out = amountIn * Number(priceC0inC1);
         } else {
             const p = Number(priceC0inC1);
-            if (p === 0) {
-                return null;
-            }
+            if (p === 0) return null;
             out = amountIn / p;
         }
 
-
-
         return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
-    }, [poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1, poolGhostLiquidity, price, decimals0, decimals1]);
+    }, [slot0Data, poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1, poolGhostLiquidity, price, decimals0, decimals1]);
 
     const handleInitialize = async () => {
         if (!isConnected || !address) {
