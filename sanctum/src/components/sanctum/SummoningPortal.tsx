@@ -12,7 +12,7 @@ import { useEidolonHook } from "@/hooks/useEidolonHook";
 import { useAccount, useBalance } from "wagmi";
 import { TOKENS, TOKEN_MAP, type Token } from "@/config/tokens";
 import { getPoolId } from "@/utils/uniswap";
-import { CONTRACTS, POOLS } from "@/config/web3";
+import { CONTRACTS, POOLS, POOL_CONFIG } from "@/config/web3";
 import { toast } from "sonner";
 import { type Address } from "viem";
 import Image from "next/image";
@@ -37,9 +37,9 @@ export function SummoningPortal() {
     const [amountB, setAmountB] = useState<string>("12500"); // Default for demo
     const [validity, setValidity] = useState<number>(3); // Index 0-3
     const [showAdvanced, setShowAdvanced] = useState(false);
-    const [customFee, setCustomFee] = useState<string>("3000"); // Standard 0.3%
-    const [customTickSpacing, setCustomTickSpacing] = useState<string>("200"); // Standard for 0.3%
-    const [customHookAddress, setCustomHookAddress] = useState<string>(CONTRACTS.unichainSepolia.eidolonHook);
+    const [customFee, setCustomFee] = useState<string>(String(POOL_CONFIG.fee)); // From centralized config
+    const [customTickSpacing, setCustomTickSpacing] = useState<string>(String(POOL_CONFIG.tickSpacing)); // From centralized config
+    const [customHookAddress, setCustomHookAddress] = useState<string>(POOL_CONFIG.hook);
 
     // Hooks
     const { signPermit, isPending: isSignPending, error: signError } = useGhostPermit();
@@ -121,9 +121,9 @@ export function SummoningPortal() {
         const signingTokenA = tokenA.address;
         const signingTokenB = tokenB.address;
 
-        let targetTickSpacing = showAdvanced ? parseInt(customTickSpacing) : 60;
-        let targetFee = showAdvanced ? parseInt(customFee) : 100;
-        let targetHook = showAdvanced ? customHookAddress : CONTRACTS.unichainSepolia.eidolonHook;
+        let targetTickSpacing = showAdvanced ? parseInt(customTickSpacing) : POOL_CONFIG.tickSpacing;
+        let targetFee = showAdvanced ? parseInt(customFee) : POOL_CONFIG.fee;
+        let targetHook = showAdvanced ? customHookAddress : POOL_CONFIG.hook;
 
         const WETH_ADDR = TOKEN_MAP["WETH"].address;
         const EIETH_ADDR = TOKEN_MAP["eiETH"].address;
@@ -170,9 +170,9 @@ export function SummoningPortal() {
         const signingTokenA = tokenA.address;
         const WETH_ADDR = TOKEN_MAP["WETH"].address;
 
-        let targetTickSpacing = showAdvanced ? parseInt(customTickSpacing) : 60;
-        let targetFee = showAdvanced ? parseInt(customFee) : 100;
-        let targetHook = showAdvanced ? customHookAddress : CONTRACTS.unichainSepolia.eidolonHook;
+        let targetTickSpacing = showAdvanced ? parseInt(customTickSpacing) : POOL_CONFIG.tickSpacing;
+        let targetFee = showAdvanced ? parseInt(customFee) : POOL_CONFIG.fee;
+        let targetHook = showAdvanced ? customHookAddress : POOL_CONFIG.hook;
 
         const currentPoolId = getNormalizedPoolId();
 
@@ -199,6 +199,7 @@ export function SummoningPortal() {
                     expiry: Number(result.deadline) * 1000,
                     signature: result.signature,
                     liquidityMode: liquidityMode,
+                    type: 'liquidity', // [NEW] Identify as JIT liquidity
                     nonce: result.nonce.toString(),
                     provider: address!,
                     poolId: currentPoolId as `0x${string}`,

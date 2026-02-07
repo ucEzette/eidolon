@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 
 export interface GhostPosition {
     id: string;
-    tokenA: string; // Symbol
-    tokenB: string; // Symbol
+    tokenA: string; // Symbol or Address
+    tokenB: string; // Symbol or Address
     amountA: string;
     amountB: string;
     expiry: number; // Timestamp
     signature: string;
     status: 'Active' | 'Expired' | 'Revoked' | 'Settled';
+    type: 'liquidity' | 'swap'; // [NEW] Distinguish intent type
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
     nonce: string; // Storing as string to avoid serialization issues
@@ -38,7 +39,6 @@ export function useGhostPositions() {
                         const serverIds = new Set(serverOrders.map(o => o.id));
 
                         // Keep local items that are recent (created < 10s ago) and not yet in server
-                        // This handles the "Optimistic vs Slow Server" race
                         const now = Date.now();
                         const recentPending = prev.filter(p => !serverIds.has(p.id) && (now - p.timestamp < 10000));
 
@@ -72,7 +72,6 @@ export function useGhostPositions() {
 
         // Sync to Relayer
         try {
-
             const response = await fetch('/api/relayer/orders', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -81,12 +80,9 @@ export function useGhostPositions() {
             const result = await response.json();
             if (!result.success) {
                 console.error("Relayer rejected order:", result.error);
-            } else {
-
             }
         } catch (e) {
             console.error("Failed to push order to Relayer:", e);
-            // Context: In a real app, rollback optimistic update or show error toast
         }
     };
 
@@ -97,7 +93,7 @@ export function useGhostPositions() {
         );
         setPositions(updatedStart);
 
-        // Sync Update to Relayer (Re-saving with new status)
+        // Sync Update to Relayer
         try {
             const targetPos = updatedStart.find(p => p.id === id);
             if (targetPos) {

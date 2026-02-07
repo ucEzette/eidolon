@@ -280,6 +280,7 @@ export function MirrorDashboard() {
                             <thead>
                                 <tr className="border-b border-white/5 bg-white/[0.02]">
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Asset Pair</th>
+                                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Type</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono">Liquidity</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-center">Expiry</th>
                                     <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-widest font-mono text-center">Status</th>
@@ -414,13 +415,15 @@ const PositionRow = React.memo(({ pos, now, onRevoke }: { pos: any, now: number,
                     <div>
                         <div className="font-bold text-white flex items-center gap-2">
                             {pos.tokenA}-{pos.tokenB}
-                            <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border ${isDual ? 'text-purple-300 border-purple-500/30 bg-purple-500/10' : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'}`}>
-                                {isDual ? 'Dual' : 'Single'}
-                            </span>
                         </div>
                         <div className="text-xs text-slate-500">Unichain Sepolia</div>
                     </div>
                 </div>
+            </td>
+            <td className="px-6 py-4">
+                <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded border font-bold ${pos.type === 'swap' ? 'text-amber-300 border-amber-500/30 bg-amber-500/10' : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'}`}>
+                    {pos.type === 'swap' ? 'Swap Intent' : (isDual ? 'LP (Dual)' : 'LP (Single)')}
+                </span>
             </td>
             <td className="px-6 py-4 font-mono text-slate-300">
                 <div className="flex flex-col">
@@ -466,7 +469,9 @@ const PositionCard = React.memo(({ pos, now, onRevoke }: { pos: any, now: number
                     </div>
                     <div>
                         <div className="text-sm font-bold text-white">{pos.tokenA}-{pos.tokenB}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-wider">{isDual ? 'Dual Sided' : 'Single Sided'}</div>
+                        <div className={`text-[10px] uppercase tracking-wider font-bold ${pos.type === 'swap' ? 'text-amber-400' : 'text-slate-500'}`}>
+                            {pos.type === 'swap' ? 'Swap Intent' : (isDual ? 'Dual Sided LP' : 'Single Sided LP')}
+                        </div>
                     </div>
                 </div>
                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${isExpired ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
