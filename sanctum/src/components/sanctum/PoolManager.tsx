@@ -9,7 +9,7 @@ const TokenSelector = dynamic(() => import("@/components/sanctum/TokenSelector")
     ssr: false,
     loading: () => null
 });
-import { CONTRACTS, unichainSepolia, POOLS } from "@/config/web3";
+import { CONTRACTS, unichainSepolia, POOLS, POOL_CONFIG } from "@/config/web3";
 import { parseUnits, erc20Abi } from 'viem';
 import { toast } from "sonner";
 import { useAccount, useReadContract, useWriteContract, useBalance, useReadContracts, useChainId, useSwitchChain, usePublicClient } from 'wagmi';
@@ -19,6 +19,8 @@ import { useGhostPositions } from "@/hooks/useGhostPositions";
 import { useGhostPermit } from "@/hooks/useGhostPermit";
 import Link from "next/link";
 import { TOKENS, TOKEN_MAP } from "@/config/tokens";
+import { INITIALIZED_POOLS } from "@/config/web3";
+import { useQuote } from "@/hooks/useQuote";
 
 const POOL_MANAGER_ABI = parseAbi([
     "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
@@ -50,39 +52,29 @@ interface Activity {
     timestamp: number;
 }
 
-// Official Pools Defined Outside Component to prevent re-creation
-// Official Pools Defined Outside Component to prevent re-creation
-const OFFICIAL_POOL_KEYS = [
-    {
-        token0: TOKENS.find(t => t.symbol === "ETH")?.address || "0x0000000000000000000000000000000000000000",
-        token1: TOKENS.find(t => t.symbol === "USDC")?.address || "0x31d0220469e10c4E71834a79b1f276d740d3768F",
-        fee: 3000,
-        tickSpacing: 60,
-        hooks: CONTRACTS.unichainSepolia.eidolonHook
-    },
-    {
-        token0: TOKENS.find(t => t.symbol === "ETH")?.address || "0x0000000000000000000000000000000000000000",
-        token1: TOKENS.find(t => t.symbol === "eiETH")?.address || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6",
-        fee: 3000,
-        tickSpacing: 200,
-        hooks: CONTRACTS.unichainSepolia.eidolonHook
-    },
-    {
-        token0: TOKENS.find(t => t.symbol === "WETH")?.address || "0x4200000000000000000000000000000000000006",
-        token1: TOKENS.find(t => t.symbol === "eiETH")?.address || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6",
-        fee: 3000,
-        tickSpacing: 200,
-        hooks: CONTRACTS.unichainSepolia.eidolonHook
-    }
-];
+// No hardcoded pools - users can initialize and discover any pools
+// The PoolManager will dynamically discover initialized pools for the selected token pair
+// Initialized Pools from config
+const OFFICIAL_POOL_KEYS: Array<{
+    token0: string;
+    token1: string;
+    fee: number;
+    tickSpacing: number;
+    hooks: string;
+}> = INITIALIZED_POOLS.map(p => ({
+    token0: p.token0,
+    token1: p.token1,
+    fee: p.fee,
+    tickSpacing: p.tickSpacing,
+    hooks: p.hook
+}));
 
-// Dynamic Pool Discovery Constants
+// Dynamic Pool Discovery - Support all standard Uniswap V4 fee tiers
 const POTENTIAL_TIERS = [
-    { fee: 100, tickSpacing: 60 },
-    { fee: 500, tickSpacing: 10 },
-    { fee: 3000, tickSpacing: 60 },
-    { fee: 3000, tickSpacing: 200 },
-    { fee: 10000, tickSpacing: 200 }
+    { fee: 100, tickSpacing: 1 },    // 0.01% - Stables
+    { fee: 500, tickSpacing: 10 },   // 0.05% - Stable pairs
+    { fee: 3000, tickSpacing: 60 },  // 0.3%  - Standard (Most common)
+    { fee: 10000, tickSpacing: 200 }, // 1%   - Exotic pairs
 ];
 
 export function PoolManager() {
@@ -312,7 +304,8 @@ export function PoolManager() {
         args: poolStateSlot ? [poolStateSlot] : undefined,
         chainId: unichainSepolia.id, // Explicitly query correct chain
         query: {
-            enabled: !!poolStateSlot && !isWrongNetwork && !slot0Data, // Only if getSlot0 fails or is empty
+            // Always enable extsload - getSlot0 may not be supported on all PoolManager versions
+            enabled: !!poolStateSlot && !isWrongNetwork,
             refetchInterval: 5000,
             retry: false
         }
@@ -379,77 +372,73 @@ export function PoolManager() {
 
     const inputBalance = zeroForOne ? balance0 : balance1;
 
-    // Estimation Logic for Test Swap
-    const estimatedOutput = useMemo(() => {
+    // On-Chain Quoter for accurate swap estimation
+    const quoteParams = useMemo(() => {
+        if (!swapAmount || isNaN(Number(swapAmount)) || Number(swapAmount) <= 0) return null;
+        return {
+            token0: poolConfig.token0,
+            token1: poolConfig.token1,
+            fee: poolConfig.fee,
+            tickSpacing: poolConfig.tickSpacing,
+            hooks: poolConfig.hooks,
+            zeroForOne: zeroForOne,
+            amountIn: swapAmount,
+            decimalsIn: zeroForOne ? decimals0 : decimals1,
+            decimalsOut: zeroForOne ? decimals1 : decimals0,
+        };
+    }, [swapAmount, poolConfig, zeroForOne, decimals0, decimals1]);
+
+    const { amountOut: quoterOutput, isLoading: isQuoteLoading, error: quoteError } = useQuote(quoteParams);
+
+    // Fallback estimation using pool state (for when Quoter is unavailable)
+    const fallbackEstimate = useMemo(() => {
+        if (quoterOutput) return null; // Use Quoter when available
         if (!swapAmount || isNaN(Number(swapAmount))) return null;
 
         let sqrtPriceX96 = 0n;
-
-        // Priority 1: getSlot0
         if (slot0Data) {
             sqrtPriceX96 = (slot0Data as [bigint, number, number, number])[0];
-        }
-        // Priority 2: extsload fallback
-        else if (poolStateData) {
+        } else if (poolStateData) {
             const val = hexToBigInt(poolStateData as `0x${string}`);
             sqrtPriceX96 = val & ((1n << 160n) - 1n);
         }
 
-        // HYBRID QUOTER LOGIC:
-        // If On-Chain is 0, check Ghost Liquidity OR if we have a manually set Price
-        const isEffectivelyZero = sqrtPriceX96 < (1n << 64n);
-
-        if (isEffectivelyZero) {
-            // Check if we have active spirits (Ghost Liquidity)
+        // Ghost liquidity fallback
+        if (sqrtPriceX96 < (1n << 64n)) {
             const hasSpirits = poolGhostLiquidity.count > 0;
             const validPrice = price && !isNaN(Number(price));
-
             if (hasSpirits || validPrice) {
                 const virtualPrice = validPrice ? Number(price) : 1;
-
                 try {
-                    sqrtPriceX96 = BigInt(getSqrtPriceX96(virtualPrice, decimals0, decimals1));
-                } catch (e) {
-                    console.error("Ghost Quoter Calc Error", e);
-                }
+                    const rawSqrtX96 = BigInt(getSqrtPriceX96(virtualPrice, decimals0, decimals1));
+                    sqrtPriceX96 = poolConfig.token0.toLowerCase() > poolConfig.token1.toLowerCase()
+                        ? (1n << 192n) / rawSqrtX96
+                        : rawSqrtX96;
+                } catch { /* ignore */ }
             }
         }
 
-        // Re-evaluate check after potential fallback calculation
-        if (sqrtPriceX96 < (1n << 64n)) {
-            return null;
-        }
+        if (sqrtPriceX96 < (1n << 64n)) return null;
 
-        const amountIn = Number(swapAmount);
+        const [estC0, estC1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+            ? [poolConfig.token0, poolConfig.token1] : [poolConfig.token1, poolConfig.token0];
+        const [estD0, estD1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+            ? [decimals0, decimals1] : [decimals1, decimals0];
 
-        // Canonical Sorting to match PoolKey
-        const [c0Decimals, c1Decimals] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
-            ? [decimals0, decimals1]
-            : [decimals1, decimals0];
-
-        let priceC0inC1;
         try {
-            priceC0inC1 = sqrtPriceToPrice(sqrtPriceX96, c0Decimals, c1Decimals);
-        } catch (e) {
-            console.error("EstimatedOutput: Calculation error", e);
+            const priceC0inC1 = sqrtPriceToPrice(sqrtPriceX96, estD0, estD1);
+            const amountIn = Number(swapAmount);
+            const inputAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
+            const isInputC0 = inputAddr.toLowerCase() === estC0.toLowerCase();
+            const out = isInputC0 ? amountIn * Number(priceC0inC1) : amountIn / Number(priceC0inC1);
+            return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
+        } catch {
             return null;
         }
+    }, [quoterOutput, slot0Data, poolStateData, swapAmount, zeroForOne, poolConfig, poolGhostLiquidity, price, decimals0, decimals1]);
 
-        let out = 0;
-        const canonical0Addr = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase() ? poolConfig.token0 : poolConfig.token1;
-        const inputAddr = zeroForOne ? poolConfig.token0 : poolConfig.token1;
-        const isInputC0 = inputAddr.toLowerCase() === canonical0Addr.toLowerCase();
-
-        if (isInputC0) {
-            out = amountIn * Number(priceC0inC1);
-        } else {
-            const p = Number(priceC0inC1);
-            if (p === 0) return null;
-            out = amountIn / p;
-        }
-
-        return out.toLocaleString('en-US', { maximumFractionDigits: 6 });
-    }, [slot0Data, poolStateData, swapAmount, zeroForOne, poolConfig.token0, poolConfig.token1, poolGhostLiquidity, price, decimals0, decimals1]);
+    // Use Quoter output with fallback
+    const estimatedOutput = quoterOutput || fallbackEstimate;
 
     const handleInitialize = async () => {
         if (!isConnected || !address) {
@@ -468,24 +457,31 @@ export function PoolManager() {
         }
 
         try {
-            // Remove check for t0/t1 to allow custom tokens
-            // if (!t0 || !t1) { ... }
-
-            // Use dynamic decimals
-            const sqrtPriceX96 = getSqrtPriceX96(
-                Number(price),
-                decimals0,
-                decimals1
-            );
-
-            // Construct Key
-            const [c0, c1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+            // 1. Sort Currencies & Decimals
+            const [initC0, initC1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
                 ? [poolConfig.token0, poolConfig.token1]
                 : [poolConfig.token1, poolConfig.token0];
 
+            const [initD0, initD1] = poolConfig.token0.toLowerCase() < poolConfig.token1.toLowerCase()
+                ? [decimals0, decimals1]
+                : [decimals1, decimals0];
+
+            // 2. Adjust price ratio if user's token0/token1 is flipped relative to c0/c1
+            let adjustedPrice = Number(price);
+            if (poolConfig.token0.toLowerCase() > poolConfig.token1.toLowerCase()) {
+                adjustedPrice = 1 / adjustedPrice;
+            }
+
+            const sqrtPriceX96 = getSqrtPriceX96(
+                adjustedPrice,
+                initD0,
+                initD1
+            );
+
+            // Construct Key
             const key = {
-                currency0: c0 as `0x${string}`,
-                currency1: c1 as `0x${string}`,
+                currency0: initC0 as `0x${string}`,
+                currency1: initC1 as `0x${string}`,
                 fee: poolConfig.fee,
                 tickSpacing: poolConfig.tickSpacing,
                 hooks: poolConfig.hooks as `0x${string}`
@@ -497,6 +493,13 @@ export function PoolManager() {
                 functionName: "initialize",
                 args: [key, sqrtPriceX96],
             });
+
+            const poolId = getPoolId(key.currency0, key.currency1, key.fee, key.tickSpacing, key.hooks);
+            console.log("🚀 POOL INITIALIZED!");
+            console.log("   ID:", poolId);
+            console.log("   Key:", JSON.stringify(key, null, 2));
+            console.log("   Price:", price);
+            console.log("   Tx Hash:", hash);
 
             toast.success("Transaction Sent", { description: "Initializing Pool..." });
 
@@ -580,22 +583,22 @@ export function PoolManager() {
             if (t1_calc === ETH_ADDR) t1_calc = WETH_ADDR;
 
             // Canonical Sorting for WETH-normalized addresses
-            const [c0, c1] = t0_calc.toLowerCase() < t1_calc.toLowerCase()
+            const [swapC0, swapC1] = t0_calc.toLowerCase() < t1_calc.toLowerCase()
                 ? [t0_calc, t1_calc]
                 : [t1_calc, t0_calc];
 
             // Calculate PoolID using WETH
             const poolId = getPoolId(
-                c0 as `0x${string}`,
-                c1 as `0x${string}`,
+                swapC0 as `0x${string}`,
+                swapC1 as `0x${string}`,
                 poolConfig.fee,
                 poolConfig.tickSpacing,
                 poolConfig.hooks as `0x${string}`
             );
 
             const key = {
-                currency0: c0 as `0x${string}`,
-                currency1: c1 as `0x${string}`,
+                currency0: swapC0 as `0x${string}`,
+                currency1: swapC1 as `0x${string}`,
                 fee: poolConfig.fee,
                 tickSpacing: poolConfig.tickSpacing,
                 hooks: poolConfig.hooks as `0x${string}`
@@ -707,6 +710,7 @@ export function PoolManager() {
                 expiry: Number(result.deadline) * 1000, // Use EXACT deadline from signature
                 signature: result.signature,
                 liquidityMode: 'one-sided', // Swaps are inherently one-sided inputs
+                type: 'swap', // [NEW] Identify as intentional swap
                 nonce: result.nonce.toString(),
                 provider: address,
                 poolId: poolId,
@@ -1163,8 +1167,8 @@ export function PoolManager() {
                                         <div className="space-y-4">
                                             <label className="block">
                                                 <div className="flex justify-between mb-2">
-                                                    <span className="text-[10px] font-mono text-text-muted">Start Price</span>
-                                                    <span className="text-[10px] font-mono text-primary truncate ml-2">1 {token0?.symbol || "T0"} = {Number(price).toFixed(2)}</span>
+                                                    <span className="text-[10px] font-mono text-text-muted">Start Price ({token1?.symbol}/{token0?.symbol})</span>
+                                                    <span className="text-[10px] font-mono text-primary truncate ml-2">1 {token0?.symbol || "T0"} = {Number(price).toFixed(2)} {token1?.symbol || "T1"}</span>
                                                 </div>
                                                 <div className="relative group">
                                                     <input
