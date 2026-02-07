@@ -72,8 +72,8 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
     /// @notice Provider type for fee calculation
     enum ProviderType {
-        SINGLE_SIDED,   // Lazy Investor - 20% fee
-        DUAL_SIDED      // Pro LP - 10% fee
+        SINGLE_SIDED, // Lazy Investor - 20% fee
+        DUAL_SIDED // Pro LP - 10% fee
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -97,17 +97,18 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @notice Tracks active materializations for atomic settlement
     /// @dev poolId => provider => MaterializationState
     struct MaterializationState {
-        uint256 amount;            // Input token amount
-        uint128 liquidity;         // Liquidity units minted
-        int24 tickLower;           // JIT range lower
-        int24 tickUpper;           // JIT range upper
-        uint256 initialBalance0;   // Balance of currency0 before JIT
-        uint256 initialBalance1;   // Balance of currency1 before JIT
-        Currency currency;         // Input currency
+        uint256 amount; // Input token amount
+        uint128 liquidity; // Liquidity units minted
+        int24 tickLower; // JIT range lower
+        int24 tickUpper; // JIT range upper
+        uint256 initialBalance0; // Balance of currency0 before JIT
+        uint256 initialBalance1; // Balance of currency1 before JIT
+        Currency currency; // Input currency
         ProviderType providerType;
         bool active;
     }
-    mapping(bytes32 => mapping(address => MaterializationState)) private _materializations;
+    mapping(bytes32 => mapping(address => MaterializationState))
+        private _materializations;
 
     /// @notice Protocol fee accumulator
     /// @dev currency => accumulated fees
@@ -140,19 +141,29 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
     /// @notice Emitted when membership is added or extended
     event MembershipUpdated(address indexed provider, uint256 expiry);
-    
+
     /// @notice Emitted when membership is revoked
     event MembershipRevoked(address indexed provider);
-    
+
     /// @notice Emitted when protocol fees are withdrawn
-    event FeesWithdrawn(Currency indexed currency, address indexed to, uint256 amount);
-    
+    event FeesWithdrawn(
+        Currency indexed currency,
+        address indexed to,
+        uint256 amount
+    );
+
     /// @notice Emitted when treasury address is updated
-    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
-    
+    event TreasuryUpdated(
+        address indexed oldTreasury,
+        address indexed newTreasury
+    );
+
     /// @notice Emitted when ownership is transferred
-    event OwnershipTransferred(address indexed oldOwner, address indexed newOwner);
-    
+    event OwnershipTransferred(
+        address indexed oldOwner,
+        address indexed newOwner
+    );
+
     /// @notice Emitted when fee rates are updated
     event FeesUpdated(uint16 singleSidedFeeBps, uint16 dualSidedFeeBps);
 
@@ -162,13 +173,13 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
     /// @notice Thrown when caller is not the owner
     error NotOwner();
-    
+
     /// @notice Thrown when address is zero
     error ZeroAddress();
-    
+
     /// @notice Thrown when withdrawal amount exceeds balance
     error InsufficientFees();
-    
+
     /// @notice Thrown when fee exceeds maximum allowed
     error FeeTooHigh();
 
@@ -212,11 +223,14 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @notice Add or extend membership for a provider (fee exemption)
     /// @param provider The provider address
     /// @param duration Duration in seconds to add to membership
-    function addMembership(address provider, uint256 duration) external onlyOwner {
+    function addMembership(
+        address provider,
+        uint256 duration
+    ) external onlyOwner {
         if (provider == address(0)) revert ZeroAddress();
         uint256 currentExpiry = membershipExpiry[provider];
         uint256 newExpiry;
-        
+
         if (currentExpiry > block.timestamp) {
             // Extend existing membership
             newExpiry = currentExpiry + duration;
@@ -224,7 +238,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
             // Start new membership from now
             newExpiry = block.timestamp + duration;
         }
-        
+
         membershipExpiry[provider] = newExpiry;
         emit MembershipUpdated(provider, newExpiry);
     }
@@ -246,19 +260,22 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @notice Withdraw accumulated protocol fees
     /// @param currency The currency to withdraw
     /// @param amount The amount to withdraw (0 = all)
-    function withdrawFees(Currency currency, uint256 amount) external onlyOwner {
+    function withdrawFees(
+        Currency currency,
+        uint256 amount
+    ) external onlyOwner {
         if (treasury == address(0)) revert ZeroAddress();
-        
+
         uint256 available = protocolFees[currency];
         uint256 withdrawAmount = amount == 0 ? available : amount;
-        
+
         if (withdrawAmount > available) revert InsufficientFees();
-        
+
         protocolFees[currency] -= withdrawAmount;
-        
+
         // Transfer to treasury
         currency.transfer(treasury, withdrawAmount);
-        
+
         emit FeesWithdrawn(currency, treasury, withdrawAmount);
     }
 
@@ -274,13 +291,16 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @notice Update fee rates for provider types
     /// @param newSingleSidedFeeBps New fee for single-sided (Lazy Investor) in basis points
     /// @param newDualSidedFeeBps New fee for dual-sided (Pro LP) in basis points
-    function setFees(uint16 newSingleSidedFeeBps, uint16 newDualSidedFeeBps) external onlyOwner {
+    function setFees(
+        uint16 newSingleSidedFeeBps,
+        uint16 newDualSidedFeeBps
+    ) external onlyOwner {
         if (newSingleSidedFeeBps > MAX_FEE_BPS) revert FeeTooHigh();
         if (newDualSidedFeeBps > MAX_FEE_BPS) revert FeeTooHigh();
-        
+
         singleSidedFeeBps = newSingleSidedFeeBps;
         dualSidedFeeBps = newDualSidedFeeBps;
-        
+
         emit FeesUpdated(newSingleSidedFeeBps, newDualSidedFeeBps);
     }
 
@@ -299,23 +319,29 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
     /// @notice Returns the hook permissions bitmap
     /// @dev Enables beforeSwap and afterSwap hooks
-    function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
-        return Hooks.Permissions({
-            beforeInitialize: true,        // ✓ Enable to allow initialization even if flag collision occurs
-            afterInitialize: false,
-            beforeAddLiquidity: false,
-            afterAddLiquidity: false,
-            beforeRemoveLiquidity: false,
-            afterRemoveLiquidity: false,
-            beforeSwap: true,              // ✓ Materialize liquidity
-            afterSwap: true,               // ✓ Settle and return funds
-            beforeDonate: false,
-            afterDonate: false,
-            beforeSwapReturnDelta: true,   // ✓ Modify swap amounts
-            afterSwapReturnDelta: false,
-            afterAddLiquidityReturnDelta: false,
-            afterRemoveLiquidityReturnDelta: false
-        });
+    function getHookPermissions()
+        public
+        pure
+        override
+        returns (Hooks.Permissions memory)
+    {
+        return
+            Hooks.Permissions({
+                beforeInitialize: true, // ✓ Enable to allow initialization even if flag collision occurs
+                afterInitialize: false,
+                beforeAddLiquidity: false,
+                afterAddLiquidity: false,
+                beforeRemoveLiquidity: false,
+                afterRemoveLiquidity: false,
+                beforeSwap: true, // ✓ Materialize liquidity
+                afterSwap: true, // ✓ Settle and return funds
+                beforeDonate: false,
+                afterDonate: false,
+                beforeSwapReturnDelta: true, // ✓ Modify swap amounts
+                afterSwapReturnDelta: false,
+                afterAddLiquidityReturnDelta: false,
+                afterRemoveLiquidityReturnDelta: false
+            });
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -351,10 +377,13 @@ contract EidolonHook is BaseHook, IEidolonHook {
         SwapParams calldata params,
         bytes calldata hookData
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
-
         // If no hookData provided, this is a normal swap - don't interfere
         if (hookData.length == 0) {
-            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+            return (
+                this.beforeSwap.selector,
+                BeforeSwapDeltaLibrary.ZERO_DELTA,
+                0
+            );
         }
 
         PoolId poolId = key.toId();
@@ -362,19 +391,24 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
         _handleExorcism(sender, poolId, poolIdBytes);
 
-        (int128 totalSpecifiedClaimed, int128 totalUnspecifiedClaimed) = _processGhostPermits(
-            key,
-            poolId,
-            poolIdBytes,
-            params,
-            hookData
-        );
+        (
+            int128 totalSpecifiedClaimed,
+            int128 totalUnspecifiedClaimed
+        ) = _processGhostPermits(key, poolId, poolIdBytes, params, hookData);
 
-        return (this.beforeSwap.selector, toBeforeSwapDelta(totalSpecifiedClaimed, totalUnspecifiedClaimed), 0);
+        return (
+            this.beforeSwap.selector,
+            toBeforeSwapDelta(totalSpecifiedClaimed, totalUnspecifiedClaimed),
+            0
+        );
     }
 
     /// @notice Helper to handle anti-MEV logic
-    function _handleExorcism(address sender, PoolId poolId, bytes32 poolIdBytes) internal {
+    function _handleExorcism(
+        address sender,
+        PoolId poolId,
+        bytes32 poolIdBytes
+    ) internal {
         SwapContext storage ctx = _swapContexts[poolIdBytes];
         if (ctx.blockNumber == block.number) {
             ctx.swapCount++;
@@ -397,16 +431,23 @@ contract EidolonHook is BaseHook, IEidolonHook {
         bytes32 poolIdBytes,
         SwapParams calldata params,
         bytes calldata hookData
-    ) internal returns (int128 totalSpecifiedClaimed, int128 totalUnspecifiedClaimed) {
+    )
+        internal
+        returns (int128 totalSpecifiedClaimed, int128 totalUnspecifiedClaimed)
+    {
         (
             GhostPermit[] memory permits,
             bytes[] memory signatures,
             WitnessLib.WitnessData[] memory witnesses
-        ) = abi.decode(hookData, (GhostPermit[], bytes[], WitnessLib.WitnessData[]));
+        ) = abi.decode(
+                hookData,
+                (GhostPermit[], bytes[], WitnessLib.WitnessData[])
+            );
 
-        bool isSameBlock = _swapContexts[poolIdBytes].blockNumber == block.number;
+        bool isSameBlock = _swapContexts[poolIdBytes].blockNumber ==
+            block.number;
         uint256 swapCount = _swapContexts[poolIdBytes].swapCount;
-        
+
         // Determine JIT direction
         // If swap is ZeroForOne (selling 0), we provide 1 (Buy 0) -> Price Down range
         // If swap is OneForZero (selling 1), we provide 0 (Buy 1) -> Price Up range
@@ -415,31 +456,39 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
         for (uint256 i = 0; i < permits.length; i++) {
             GhostPermit memory permit = permits[i];
-            
+
             // 1. Validation
-            if (block.timestamp > permit.deadline || 
-                _usedNonces[permit.provider][permit.nonce] || 
-                witnesses[i].poolId != poolIdBytes || 
-                witnesses[i].hook != address(this)) {
+            if (
+                block.timestamp > permit.deadline ||
+                _usedNonces[permit.provider][permit.nonce] ||
+                witnesses[i].poolId != poolIdBytes ||
+                witnesses[i].hook != address(this)
+            ) {
                 continue;
             }
 
             // 2. Calculate JIT Position
-            (int24 tickLower, int24 tickUpper, uint128 liquidity) = JITLiquidityLib.calculateJITPosition(
-                key,
-                currentTick,
-                permit.amount,
-                isZeroForOne,
-                permit.currency
-            );
-            
+            (
+                int24 tickLower,
+                int24 tickUpper,
+                uint128 liquidity
+            ) = JITLiquidityLib.calculateJITPosition(
+                    key,
+                    currentTick,
+                    permit.amount,
+                    isZeroForOne,
+                    permit.currency
+                );
+
             if (liquidity == 0) continue;
 
             // 3. State Updates
             _usedNonces[permit.provider][permit.nonce] = true;
             _activeProviders[poolIdBytes].push(permit.provider);
-            
-            _materializations[poolIdBytes][permit.provider] = MaterializationState({
+
+            _materializations[poolIdBytes][
+                permit.provider
+            ] = MaterializationState({
                 amount: permit.amount,
                 liquidity: liquidity,
                 tickLower: tickLower,
@@ -447,10 +496,12 @@ contract EidolonHook is BaseHook, IEidolonHook {
                 initialBalance0: key.currency0.balanceOfSelf(),
                 initialBalance1: key.currency1.balanceOfSelf(),
                 currency: permit.currency,
-                providerType: permit.isDualSided ? ProviderType.DUAL_SIDED : ProviderType.SINGLE_SIDED,
+                providerType: permit.isDualSided
+                    ? ProviderType.DUAL_SIDED
+                    : ProviderType.SINGLE_SIDED,
                 active: true
             });
-            
+
             if (isSameBlock && swapCount >= 2) {
                 botKillCount[permit.provider]++;
             }
@@ -469,7 +520,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
                 }),
                 bytes("") // No callback data needed
             );
-            
+
             // PAY FOR JIT
             // We settle exactly what the PoolManager expects for the liquidity provision.
             if (delta.amount0() < 0) {
@@ -485,9 +536,14 @@ contract EidolonHook is BaseHook, IEidolonHook {
                 poolManager.settle();
             }
 
-            emit LiquidityMaterialized(permit.provider, poolId, permit.amount, 0);
+            emit LiquidityMaterialized(
+                permit.provider,
+                poolId,
+                permit.amount,
+                0
+            );
         }
-        
+
         // JIT does not return a swap delta to the Swapper
         return (0, 0);
     }
@@ -511,10 +567,10 @@ contract EidolonHook is BaseHook, IEidolonHook {
     ) internal override returns (bytes4, int128) {
         PoolId poolId = key.toId();
         bytes32 poolIdBytes = PoolId.unwrap(poolId);
-        
+
         // Get all active providers for this pool
         address[] storage providers = _activeProviders[poolIdBytes];
-        
+
         // If no active providers, nothing to settle
         if (providers.length == 0) {
             return (this.afterSwap.selector, 0);
@@ -526,12 +582,14 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
         for (uint256 i = 0; i < providers.length; i++) {
             address provider = providers[i];
-            MaterializationState storage state = _materializations[poolIdBytes][provider];
+            MaterializationState storage state = _materializations[poolIdBytes][
+                provider
+            ];
 
             if (!state.active) continue;
 
             // BURN JIT LIQUIDITY
-            // We burn exactly what we minted. 
+            // We burn exactly what we minted.
             // The delta we get back includes Principal + Fees + Swapped Amounts
             (BalanceDelta burnDelta, ) = poolManager.modifyLiquidity(
                 key,
@@ -543,12 +601,28 @@ contract EidolonHook is BaseHook, IEidolonHook {
                 }),
                 bytes("")
             );
-            
-            // COLLECT FROM POOL MANAGER
-            // Delta is positive (Credit) for us
+
+            // HANDLE BURN DELTAS
+            // Positive delta = credit (we take tokens from PoolManager)
+            // Negative delta = debit (we owe tokens to PoolManager, must settle)
             uint256 amount0Received;
             uint256 amount1Received;
 
+            // SETTLE ANY NEGATIVE DELTAS FIRST (fees owed, or edge cases)
+            if (burnDelta.amount0() < 0) {
+                uint256 amountToSettle = uint256(int256(-burnDelta.amount0()));
+                poolManager.sync(key.currency0);
+                key.currency0.transfer(address(poolManager), amountToSettle);
+                poolManager.settle();
+            }
+            if (burnDelta.amount1() < 0) {
+                uint256 amountToSettle = uint256(int256(-burnDelta.amount1()));
+                poolManager.sync(key.currency1);
+                key.currency1.transfer(address(poolManager), amountToSettle);
+                poolManager.settle();
+            }
+
+            // TAKE POSITIVE DELTAS (credits from removing liquidity)
             if (burnDelta.amount0() > 0) {
                 amount0Received = uint256(int256(burnDelta.amount0()));
                 poolManager.take(key.currency0, address(this), amount0Received);
@@ -560,18 +634,21 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
             // solvency is checked implicitly by ensuring both currencies are returned to the provider
             // and the hook's own baseline balance is protected below.
-            uint256 principalReturned = (state.currency == key.currency0) ? amount0Received : amount1Received;
-            
+            uint256 principalReturned = (state.currency == key.currency0)
+                ? amount0Received
+                : amount1Received;
+
             // To satisfy "funds never remain in contract", we return all remaining deltas to the provider.
             // 1. Calculate Profit and Protocol Fee if we got more principal back than we sent
             if (principalReturned > state.amount) {
                 uint256 profit = principalReturned - state.amount;
                 uint16 feeBps = _getProviderFee(provider, state.providerType);
-                uint256 protocolCut = (profit * uint256(feeBps)) / uint256(BPS_DENOMINATOR);
-                
+                uint256 protocolCut = (profit * uint256(feeBps)) /
+                    uint256(BPS_DENOMINATOR);
+
                 if (protocolCut > 0) {
                     protocolFees[state.currency] += protocolCut;
-                    
+
                     // Subtract from the amount we send to the provider
                     if (state.currency == key.currency0) {
                         amount0Received -= protocolCut;
@@ -580,21 +657,23 @@ contract EidolonHook is BaseHook, IEidolonHook {
                     }
                 }
             }
-            
+
             // To satisfy "funds never remain in contract", we return all remaining deltas to the provider.
             state.active = false;
 
-            if (amount0Received > 0) _returnFunds(provider, key.currency0, amount0Received);
-            if (amount1Received > 0) _returnFunds(provider, key.currency1, amount1Received);
+            if (amount0Received > 0)
+                _returnFunds(provider, key.currency0, amount0Received);
+            if (amount1Received > 0)
+                _returnFunds(provider, key.currency1, amount1Received);
 
             // Hook Solvency Check: Ensure we don't end with a negative delta in the PoolManager.
             // In V4, we can check this by ensuring we don't have outstanding debts for this pool.
             // For now, we loosen the individual balance check to allow token conversion.
             // If Token0 was swapped for Token1, balance0 decreases but balance1 increases.
-            
-            emit LiquiditySettled(provider, poolId, state.amount, 0); 
+
+            emit LiquiditySettled(provider, poolId, state.amount, 0);
         }
-        
+
         // Clear active providers
         delete _activeProviders[poolIdBytes];
 
@@ -616,19 +695,22 @@ contract EidolonHook is BaseHook, IEidolonHook {
         WitnessLib.WitnessData memory witness
     ) internal {
         // Construct the Permit2 transfer details
-        ISignatureTransfer.PermitTransferFrom memory permitTransfer = ISignatureTransfer.PermitTransferFrom({
-            permitted: ISignatureTransfer.TokenPermissions({
-                token: Currency.unwrap(permit.currency),
-                amount: permit.amount
-            }),
-            nonce: permit.nonce,
-            deadline: permit.deadline
-        });
+        ISignatureTransfer.PermitTransferFrom
+            memory permitTransfer = ISignatureTransfer.PermitTransferFrom({
+                permitted: ISignatureTransfer.TokenPermissions({
+                    token: Currency.unwrap(permit.currency),
+                    amount: permit.amount
+                }),
+                nonce: permit.nonce,
+                deadline: permit.deadline
+            });
 
-        ISignatureTransfer.SignatureTransferDetails memory transferDetails = ISignatureTransfer.SignatureTransferDetails({
-            to: address(this),
-            requestedAmount: permit.amount
-        });
+        ISignatureTransfer.SignatureTransferDetails
+            memory transferDetails = ISignatureTransfer
+                .SignatureTransferDetails({
+                    to: address(this),
+                    requestedAmount: permit.amount
+                });
 
         // Execute the transfer with witness verification
         // The signature is only valid if the witness data matches
@@ -646,18 +728,21 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @param provider The provider address
     /// @param providerType The type of liquidity provision
     /// @return The fee in basis points
-    function _getProviderFee(address provider, ProviderType providerType) internal view returns (uint16) {
+    function _getProviderFee(
+        address provider,
+        ProviderType providerType
+    ) internal view returns (uint16) {
         // Subscribers pay no fees
         if (isMember(provider)) {
             return 0;
         }
-        
+
         // Tiered fees based on provider type
         if (providerType == ProviderType.DUAL_SIDED) {
-            return dualSidedFeeBps;  // Pro LP
+            return dualSidedFeeBps; // Pro LP
         }
-        
-        return singleSidedFeeBps;  // Lazy Investor
+
+        return singleSidedFeeBps; // Lazy Investor
     }
 
     /// @notice Returns funds to the provider after swap settlement
@@ -671,7 +756,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
     ) internal {
         if (currency.isAddressZero()) {
             // Return ETH
-            (bool success,) = provider.call{value: amount}("");
+            (bool success, ) = provider.call{value: amount}("");
             require(success, "ETH transfer failed");
         } else {
             // Return ERC20
@@ -689,7 +774,10 @@ contract EidolonHook is BaseHook, IEidolonHook {
     }
 
     /// @inheritdoc IEidolonHook
-    function isPermitUsed(address provider, uint256 nonce) external view override returns (bool) {
+    function isPermitUsed(
+        address provider,
+        uint256 nonce
+    ) external view override returns (bool) {
         return _usedNonces[provider][nonce];
     }
 
