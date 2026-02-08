@@ -44,18 +44,12 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
             ? [token0, token1]
             : [token1, token0];
 
-        // Adjust decimals based on which token is input
-        const inputDecimals = zeroForOne ?
-            (token0.toLowerCase() === currency0.toLowerCase() ? decimalsIn : decimalsOut) :
-            (token0.toLowerCase() === currency0.toLowerCase() ? decimalsOut : decimalsIn);
-
-        const outputDecimals = zeroForOne ?
-            (token0.toLowerCase() === currency0.toLowerCase() ? decimalsOut : decimalsIn) :
-            (token0.toLowerCase() === currency0.toLowerCase() ? decimalsIn : decimalsOut);
-
         try {
             setIsLoading(true);
             setError(null);
+
+            const inputDecimals = decimalsIn;
+            const outputDecimals = decimalsOut;
 
             const exactAmount = parseUnits(amountIn, inputDecimals);
 

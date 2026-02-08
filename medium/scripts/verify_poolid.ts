@@ -12,7 +12,7 @@ const token0 = "0x4200000000000000000000000000000000000006"; // WETH
 const token1 = "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6"; // eiETH
 const fee = 3000;
 const tickSpacing = 60;
-const hooks = "0x78bb3Cc9986310FB935485192adB2Fe18C5c20C8";
+const hooks = "0x7A3FDC42Ec96AFeF175FA446ee62057F412A20c8";
 
 // Calculate pool ID the same way Uniswap does
 const [c0, c1] = token0.toLowerCase() < token1.toLowerCase() ? [token0, token1] : [token1, token0];

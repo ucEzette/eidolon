@@ -16,6 +16,20 @@ import {MockERC20} from "solmate/src/test/utils/mocks/MockERC20.sol";
 import {IEidolonHook} from "../src/interfaces/IEidolonHook.sol";
 import {WitnessLib} from "../src/libraries/WitnessLib.sol";
 
+contract MockWETH is MockERC20 {
+    constructor() MockERC20("Wrapped ETH", "WETH", 18) {}
+
+    function deposit() external payable {
+        _mint(msg.sender, msg.value);
+    }
+
+    function withdraw(uint256 amount) external {
+        _burn(msg.sender, amount);
+        (bool success, ) = msg.sender.call{value: amount}("");
+        require(success, "ETH transfer failed");
+    }
+}
+
 contract EidolonIntegrationTest is Test, Deployers {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
@@ -24,7 +38,8 @@ contract EidolonIntegrationTest is Test, Deployers {
     EidolonExecutor executor;
     MockERC20 token0;
     MockERC20 token1;
-    
+    MockWETH weth;
+
     // User & Bot
     uint256 userPk = 0xA11CE;
     address user;
@@ -37,6 +52,7 @@ contract EidolonIntegrationTest is Test, Deployers {
         (currency0, currency1) = deployMintAndApprove2Currencies();
         token0 = MockERC20(Currency.unwrap(currency0));
         token1 = MockERC20(Currency.unwrap(currency1));
+        weth = new MockWETH();
 
         user = vm.addr(userPk);
         bot = vm.addr(botPk);
@@ -48,16 +64,31 @@ contract EidolonIntegrationTest is Test, Deployers {
         token1.mint(bot, 100 ether);
 
         // 2. Deploy Hook (using Deployers helper or manual)
-        address hookAddress = address(uint160(Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG));
-        deployCodeTo("EidolonHook.sol", abi.encode(manager, address(0) /*placeholder permit2*/, address(this), address(this)), hookAddress);
+        address hookAddress = address(
+            uint160(
+                Hooks.BEFORE_SWAP_FLAG |
+                    Hooks.AFTER_SWAP_FLAG |
+                    Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
+            )
+        );
+        deployCodeTo(
+            "EidolonHook.sol",
+            abi.encode(
+                manager,
+                address(0) /*placeholder permit2*/,
+                address(this),
+                address(this)
+            ),
+            hookAddress
+        );
         hook = EidolonHook(payable(hookAddress));
 
         // 3. Deploy Executor
-        executor = new EidolonExecutor(manager);
-        
+        executor = new EidolonExecutor(manager, address(weth));
+
         // 4. Initialize Pool
         (key, ) = initPool(currency0, currency1, hook, 3000, SQRT_PRICE_1_1);
-        
+
         // Approve Executor to spend Bot's funds
         vm.startPrank(bot);
         token0.approve(address(executor), type(uint256).max);
@@ -82,7 +113,7 @@ contract EidolonIntegrationTest is Test, Deployers {
         });
 
         // Mock Signature (since we mocked Permit2 address, strict verification fails unless we mock Permit2 contract too)
-        // For this integration test, we trust the hook logic calls Permit2. 
+        // For this integration test, we trust the hook logic calls Permit2.
         // We can use `vm.mockCall` to pretend Permit2 verified it successfully.
         bytes memory signature = hex"1234";
 
@@ -100,13 +131,15 @@ contract EidolonIntegrationTest is Test, Deployers {
 
         // 3. Bot calls Executor
         // Encode HookData
-        IEidolonHook.GhostPermit[] memory permits = new IEidolonHook.GhostPermit[](1);
+        IEidolonHook.GhostPermit[]
+            memory permits = new IEidolonHook.GhostPermit[](1);
         permits[0] = permit;
         bytes[] memory signatures = new bytes[](1);
         signatures[0] = signature;
-        WitnessLib.WitnessData[] memory witnesses = new WitnessLib.WitnessData[](1);
+        WitnessLib.WitnessData[]
+            memory witnesses = new WitnessLib.WitnessData[](1);
         witnesses[0] = witness;
-        
+
         bytes memory hookData = abi.encode(permits, signatures, witnesses);
 
         // Swap Params (Bot swaps Token1 -> Token0)
