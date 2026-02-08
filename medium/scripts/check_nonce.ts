@@ -2,7 +2,7 @@
 import { createPublicClient, http } from 'viem';
 import { unichainSepolia } from 'viem/chains';
 
-const EIDOLON_HOOK = "0x78bb3Cc9986310FB935485192adB2Fe18C5c20C8";
+const EIDOLON_HOOK = "0x7A3FDC42Ec96AFeF175FA446ee62057F412A20c8";
 
 const client = createPublicClient({
     chain: unichainSepolia,

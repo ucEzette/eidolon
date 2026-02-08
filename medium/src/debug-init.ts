@@ -20,9 +20,9 @@ const client = createPublicClient({
     transport: http()
 });
 
-const POOL_MANAGER = "0x00B036B58a818B1BC34d502D3fE730Db729e62AC" as `0x${string}`;
-const HOOK = "0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8" as `0x${string}`;
-const USDC = "0x31d0220469e10c4E71834a79b1f276d740d3768F" as `0x${string}`;
+const POOL_MANAGER = CONFIG.CONTRACTS.POOL_MANAGER;
+const HOOK = CONFIG.CONTRACTS.EIDOLON_HOOK;
+const USDC = CONFIG.TOKENS.USDC.address as `0x${string}`;
 const NATIVE_ETH = "0x0000000000000000000000000000000000000000" as `0x${string}`;
 
 const FEE = 3000;

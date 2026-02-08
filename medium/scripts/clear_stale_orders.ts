@@ -10,7 +10,7 @@ const REDIS_KEY = 'eidolon:orders';
 const CORRECT_CONFIG = {
     fee: 3000,
     tickSpacing: 60,
-    hookAddress: '0x78bb3Cc9986310FB935485192adB2Fe18C5c20C8'.toLowerCase()
+    hookAddress: '0x7A3FDC42Ec96AFeF175FA446ee62057F412A20c8'.toLowerCase()
 };
 
 async function clearStaleOrders() {
