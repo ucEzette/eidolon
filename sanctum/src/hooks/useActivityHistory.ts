@@ -4,7 +4,7 @@ import { parseAbiItem, formatUnits } from 'viem';
 import { CONTRACTS } from '@/config/web3';
 
 // Canonical Permit2 Address
-export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+export const PERMIT2_ADDRESS = CONTRACTS.unichainSepolia.permit2;
 
 export interface ActivityEvent {
     hash: string;

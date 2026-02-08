@@ -12,12 +12,12 @@ import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 contract InitializePool is Script {
     using PoolIdLibrary for PoolKey;
 
-    address constant POOL_MANAGER = 0x00B036B58a818B1BC34d502D3fE730Db729e62AC;
-    address constant HOOK = 0xAA4F0732028324487Dd34E7af8F4189DCB3f20c8;
-    address constant USDC = 0x31d0220469e10c4E71834a79b1f276d740d3768F;
-    address constant WETH = 0x4200000000000000000000000000000000000006;
-
     function run() external {
+        address POOL_MANAGER = vm.envAddress("POOL_MANAGER");
+        address HOOK = vm.envAddress("EIDOLON_HOOK");
+        address USDC = vm.envAddress("USDC");
+        address WETH = vm.envAddress("WETH");
+
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
@@ -32,7 +32,9 @@ contract InitializePool is Script {
         // Initial price: 1:1 for testing
         uint160 sqrtPriceX96 = 79228162514264337593543950336;
 
-        try IPoolManager(POOL_MANAGER).initialize(key, sqrtPriceX96) returns (int24 tick) {
+        try IPoolManager(POOL_MANAGER).initialize(key, sqrtPriceX96) returns (
+            int24 tick
+        ) {
             console2.log("Pool Initialized! Tick:", tick);
             console2.log("Pool ID:");
             console2.logBytes32(PoolId.unwrap(key.toId()));

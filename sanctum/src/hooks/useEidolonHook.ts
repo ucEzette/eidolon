@@ -2,7 +2,9 @@
 
 import { useReadContract, useWriteContract, useAccount } from "wagmi";
 import { CONTRACTS } from "@/config/web3";
-import EidolonHookABI from "../abi/EidolonHook.json";
+import EidolonHookJSON from "../abi/EidolonHook.json";
+
+const EidolonHookABI = EidolonHookJSON.abi;
 
 export function useEidolonHook() {
     const { chain } = useAccount();
