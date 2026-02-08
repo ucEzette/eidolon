@@ -49,6 +49,22 @@ export default function DocsPage() {
                                         Core Innovation
                                     </button>
                                 </li>
+                                <li>
+                                    <button
+                                        onClick={() => scrollToSection("gasless-swaps")}
+                                        className={`text-sm transition-colors hover:text-white ${activeSection === "gasless-swaps" ? "text-primary font-bold" : "text-text-muted"}`}
+                                    >
+                                        Gasless Swaps
+                                    </button>
+                                </li>
+                                <li>
+                                    <button
+                                        onClick={() => scrollToSection("mirror-positions")}
+                                        className={`text-sm transition-colors hover:text-white ${activeSection === "mirror-positions" ? "text-primary font-bold" : "text-text-muted"}`}
+                                    >
+                                        Mirror Positions
+                                    </button>
+                                </li>
                             </ul>
                         </div>
 
@@ -162,6 +178,45 @@ export default function DocsPage() {
                                     </h4>
                                     <p className="text-sm m-0">At rest, the Eidolon smart contract is empty. There is zero TVL to steal. We move DeFi from &quot;Trust Code&quot; to &quot;Trust Math&quot;.</p>
                                 </div>
+                            </div>
+                        </section>
+
+                        {/* Gasless Swaps */}
+                        <section id="gasless-swaps" className="space-y-6 scroll-mt-32">
+                            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                                <span className="text-accent">⛽</span> Gasless Swaps
+                            </h2>
+                            <div className="prose prose-invert prose-lg max-w-none text-text-muted/90">
+                                <p>
+                                    Eidolon introduces a <strong>Gasless Intent</strong> model. Users no longer need to hold native gas tokens or submit on-chain transactions to execute swaps.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-8">
+                                    <div className="bg-white/5 border border-white/10 p-5 rounded-xl">
+                                        <h4 className="text-white font-bold mb-2">Off-Chain Signature</h4>
+                                        <p className="text-sm">Submit your trade intent by signing a message. This signature defines exactly what you want and is stored in our Relayer.</p>
+                                    </div>
+                                    <div className="bg-white/5 border border-white/10 p-5 rounded-xl">
+                                        <h4 className="text-white font-bold mb-2">Zero Gas Barrier</h4>
+                                        <p className="text-sm">Our executors (The Medium) pick up your intent, bundle it with liquidity, and pay the gas for the execution.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Mirror Positions */}
+                        <section id="mirror-positions" className="space-y-6 scroll-mt-32">
+                            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                                <span className="text-primary">🪞</span> Mirror Positions
+                            </h2>
+                            <div className="prose prose-invert prose-lg max-w-none text-text-muted/90">
+                                <p>
+                                    Traditional LPing requires buying tokens you might not want. <strong>Mirroring</strong> allows you to provide liquidity based on the assets you <em>already hold</em>.
+                                </p>
+                                <ul className="list-disc pl-6 space-y-2">
+                                    <li>Provide single-sided liquidity with your existing WETH or USDC.</li>
+                                    <li>Automatically match market demand using our JIT Materialization engine.</li>
+                                    <li>Accrue fees directly back to your wallet without ever &quot;staking&quot; or &quot;depositing&quot;.</li>
+                                </ul>
                             </div>
                         </section>
 
@@ -365,6 +420,17 @@ export default function DocsPage() {
                                         If a swap would result in a user receiving less than they put in (principal loss), the entire transaction strictly reverts.
                                     </p>
                                 </div>
+
+                                <div>
+                                    <h3 className="text-xl font-bold text-primary mb-3">JIT Math & Precision</h3>
+                                    <p className="text-text-muted leading-relaxed">
+                                        Liquidity calculations are performed using high-precision <strong>FixedPoint96</strong> and <strong>FullMath</strong> libraries. This prevents common DeFi arithmetic errors such as overflows or rounding attacks that typically exploit small, frequently updated pools.
+                                    </p>
+                                    <div className="mockup-code bg-black border border-white/10 mt-4 text-sm scale-90 -ml-6 lg:ml-0">
+                                        <pre data-prefix="//"><code>// high-precision liquidity calc</code></pre>
+                                        <pre data-prefix=">"><code>uint128 liquidity = FullMath.mulDiv(amount, Q96, sqrtPrice);</code></pre>
+                                    </div>
+                                </div>
                             </div>
                         </section>
 
@@ -395,6 +461,13 @@ export default function DocsPage() {
                                     <div>
                                         <strong className="text-white block">Foundry & Viem</strong>
                                         Fully typed end-to-end development environment for maximum safety and correctness.
+                                    </div>
+                                </li>
+                                <li className="flex gap-4 items-start">
+                                    <span className="material-symbols-outlined text-primary mt-1">settings</span>
+                                    <div>
+                                        <strong className="text-white block">Centralized Configuration</strong>
+                                        One-click environment synchronization across the bot, frontend, and smart contract scripts using a unified `.env` model.
                                     </div>
                                 </li>
                             </ul>
