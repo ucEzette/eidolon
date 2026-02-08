@@ -1313,10 +1313,6 @@ export function PoolManager() {
                         {/* Tab Content: Swap */}
                         {poolActiveTab === 'swap' && (
                             <div className="p-4 md:p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <h3 className="text-lg md:text-xl font-display text-emerald-400 mb-2 md:mb-4 tracking-widest uppercase">Test Pool Hooks</h3>
-                                <p className="text-xs md:text-sm text-text-muted mb-4 md:mb-6">
-                                    Perform a test swap directly against this Pool Key. Guarantees your <span className="text-primary font-mono">EidolonHook</span> runs.
-                                </p>
 
                                 <div className="space-y-4 md:space-y-6 max-w-md mx-auto">
                                     {/* Input Field */}
