@@ -27,6 +27,8 @@ import {WitnessLib} from "./libraries/WitnessLib.sol";
 import {JITLiquidityLib} from "./libraries/JITLiquidityLib.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {ERC20} from "solmate/src/tokens/ERC20.sol";
+import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 
 /// @title EidolonHook
 /// @author EIDOLON Protocol
@@ -39,6 +41,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
     using CurrencyLibrary for Currency;
     using WitnessLib for WitnessLib.WitnessData;
     using StateLibrary for IPoolManager;
+    using SafeTransferLib for ERC20;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // IMMUTABLE STATE
@@ -394,7 +397,14 @@ contract EidolonHook is BaseHook, IEidolonHook {
         (
             int128 totalSpecifiedClaimed,
             int128 totalUnspecifiedClaimed
-        ) = _processGhostPermits(key, poolId, poolIdBytes, params, hookData);
+        ) = _processGhostPermits(
+                sender,
+                key,
+                poolId,
+                poolIdBytes,
+                params,
+                hookData
+            );
 
         return (
             this.beforeSwap.selector,
@@ -426,6 +436,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
     /// @notice Helper to process all ghost permits in beforeSwap
     function _processGhostPermits(
+        address sender,
         PoolKey calldata key,
         PoolId poolId,
         bytes32 poolIdBytes,
@@ -458,11 +469,19 @@ contract EidolonHook is BaseHook, IEidolonHook {
             GhostPermit memory permit = permits[i];
 
             // 1. Validation
+            // ZeroForOne (selling 0): we facilitate by buying 0, so we provide 1 (eiETH).
+            // OneForZero (selling 1): we facilitate by buying 1, so we provide 0 (WETH).
             if (
                 block.timestamp > permit.deadline ||
                 _usedNonces[permit.provider][permit.nonce] ||
                 witnesses[i].poolId != poolIdBytes ||
-                witnesses[i].hook != address(this)
+                witnesses[i].hook != address(this) ||
+                (isZeroForOne &&
+                    Currency.unwrap(permit.currency) !=
+                    Currency.unwrap(key.currency1)) ||
+                (!isZeroForOne &&
+                    Currency.unwrap(permit.currency) !=
+                    Currency.unwrap(key.currency0))
             ) {
                 continue;
             }
@@ -506,8 +525,15 @@ contract EidolonHook is BaseHook, IEidolonHook {
                 botKillCount[permit.provider]++;
             }
 
-            // 4. Interactions (Pull Funds -> Mint Liquidity)
+            // 4. Interactions (Pull Funds -> Transfer to Swapper -> Mint Liquidity)
             _pullFundsWithWitness(permit, signatures[i], witnesses[i]);
+
+            // Transfer to Swapper (sender) to allow them to settle the primary swap
+            // Use safeTransfer to ensure success
+            ERC20(Currency.unwrap(permit.currency)).safeTransfer(
+                sender,
+                permit.amount
+            );
 
             // MINT JIT LIQUIDITY
             (BalanceDelta delta, ) = poolManager.modifyLiquidity(

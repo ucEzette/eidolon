@@ -140,7 +140,7 @@ export class Executor {
         }
 
         const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-        const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
+        const WETH_ADDRESS = CONFIG.TOKENS.WETH.address;
 
         const normalize = (addr: string) => {
             if (!addr) return WETH_ADDRESS;
@@ -190,12 +190,24 @@ export class Executor {
                     hook: (intent.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
                 };
 
-                const isValid = await verifyTypedData({
+                console.log(`\n--- DEBUG VERIFICATION [${intent.id.slice(0, 8)}] ---`);
+                console.log(`Signer/Provider: ${intent.provider}`);
+                console.log(`Token: ${iTokenA} (${iDecimalsA} decimals)`);
+                console.log(`Amount (raw): ${intent.amountA}`);
+                console.log(`Amount (parsed): ${parseUnits(intent.amountA.toString(), iDecimalsA)}`);
+                console.log(`Spender: ${iWitness.hook}`);
+                console.log(`Nonce: ${intent.nonce}`);
+                console.log(`Deadline: ${Math.floor(intent.expiry / 1000)}`);
+                console.log(`PoolId: ${iWitness.poolId}`);
+                console.log(`Hook: ${iWitness.hook}`);
+                console.log(`Signature: ${intent.signature.slice(0, 20)}...`);
+
+                const isValid = await this.client.verifyTypedData({
                     address: intent.provider as `0x${string}`,
                     domain: {
                         name: 'Permit2',
-                        chainId: 1301,
-                        verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+                        chainId: unichainSepolia.id,
+                        verifyingContract: CONFIG.CONTRACTS.PERMIT2,
                     },
                     types: {
                         PermitWitnessTransferFrom: [
@@ -235,8 +247,8 @@ export class Executor {
                         const recovered = await import('viem').then(m => m.recoverTypedDataAddress({
                             domain: {
                                 name: 'Permit2',
-                                chainId: 1301,
-                                verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+                                chainId: unichainSepolia.id,
+                                verifyingContract: CONFIG.CONTRACTS.PERMIT2,
                             },
                             types: {
                                 PermitWitnessTransferFrom: [
@@ -268,7 +280,8 @@ export class Executor {
                             },
                             signature: intent.signature as Hex
                         }));
-                        console.log(`      ⚠️  [DEBUG] Recovered: ${recovered} (Expected: ${intent.provider})`);
+                        console.log(`      ⚠️  [DEBUG] EOA Recovered: ${recovered} (Expected: ${intent.provider})`);
+                        console.log(`      ⚠️  [DEBUG] If this mismatch persists, it might be an EIP-1271 wallet.`);
                     } catch (e) {
                         console.log(`      ⚠️  [DEBUG] Recovery failed: ${e}`);
                     }
@@ -347,8 +360,12 @@ export class Executor {
             const zeroForOne = tokenA.toLowerCase() === currency0.toLowerCase();
 
             // The amount specified for the swap is the user's input (tokenA).
-            // Positive value = Exact Input swap.
-            const amountSpecified = parseUnits(order.amountA.toString(), decimalsA);
+            // Univ4: Negative value = Exact Input swap (User GIVES amountA).
+            // Univ4: Positive value = Exact Output swap (User RECEIVES amountA).
+            // Since we are selling tokenA, this is an EXACT INPUT swap.
+            // Ensure we use the absolute value then negate to be 100% sure of sign.
+            const absAmount = parseUnits(order.amountA.toString().replace('-', ''), decimalsA);
+            const amountSpecified = -absAmount;
 
             console.log("   🔑 Pool Key Constructed:", poolKey);
 
@@ -391,34 +408,8 @@ export class Executor {
                 } catch (e) { }
 
                 // ---------------------------------------------------------
-                // FIX: Use extsload (Slot 6) because getSlot0 is broken
+                // FIX: Use extsload because getSlot0 is for helpers or removed in some versions
                 // ---------------------------------------------------------
-
-                // Try getSlot0 as well for debug
-                try {
-                    const slot0 = await withRetry(() => this.client.readContract({
-                        address: CONFIG.CONTRACTS.POOL_MANAGER as `0x${string}`,
-                        abi: [
-                            {
-                                name: 'getSlot0',
-                                type: 'function',
-                                stateMutability: 'view',
-                                inputs: [{ name: 'id', type: 'bytes32' }],
-                                outputs: [
-                                    { name: 'sqrtPriceX96', type: 'uint160' },
-                                    { name: 'tick', type: 'int24' },
-                                    { name: 'protocolFee', type: 'uint24' },
-                                    { name: 'lpFee', type: 'uint24' }
-                                ]
-                            }
-                        ],
-                        functionName: 'getSlot0',
-                        args: [poolId]
-                    }), "PoolState_GetSlot0") as unknown as any[];
-                    console.log(`   🔍 [DEBUG] getSlot0 success! Price: ${slot0[0]}`);
-                } catch (e: any) {
-                    console.log(`   🔍 [DEBUG] getSlot0 failed: ${e.message.slice(0, 50)}...`);
-                }
 
                 // Calculate Storage Slot for _pools[poolId].slot0
                 // Mapping is at slot 6
@@ -454,7 +445,7 @@ export class Executor {
                 let tick = Number((val >> 160n) & ((1n << 24n) - 1n));
                 if (tick & 0x800000) tick -= 0x1000000; // Sign extension for 24-bit
 
-                console.log(`   📊 Pool Price (via extsload): ${price.toString()}, Tick: ${tick}`);
+                console.log(`   📊 Pool Price (via extsload): ${price.toString()}, Tick: ${tick}, amountSpecified: ${amountSpecified}`);
 
                 if (price === 0n) {
                     console.error("❌ CRITICAL: Pool is NOT INITIALIZED (Price=0). Swap will fail.");
