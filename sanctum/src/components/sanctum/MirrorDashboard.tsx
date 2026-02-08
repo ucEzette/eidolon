@@ -12,7 +12,7 @@ import { useAccount, useReadContracts } from "wagmi";
 import { CONTRACTS } from "@/config/web3";
 import EidolonHookABI from "@/abi/EidolonHook.json";
 import { formatUnits } from "viem";
-import { TOKENS } from "@/config/tokens";
+import { TOKENS, TOKEN_MAP } from "@/config/tokens";
 
 export function MirrorDashboard() {
     const [showRevokeModal, setShowRevokeModal] = useState(false);
@@ -32,9 +32,9 @@ export function MirrorDashboard() {
     // 1. Fetch Real Accumulated Rewards (ETH, USDC, eiETH)
     // We check the 'lifetimeEarnings' mapping for the connected user
     const rewardTokens = [
-        "0x0000000000000000000000000000000000000000", // ETH
-        "0x31d0220469e10c4E71834a79b1f276d740d3768F", // USDC
-        "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6"  // eiETH
+        TOKEN_MAP["ETH"]?.address || "0x0000000000000000000000000000000000000000",
+        TOKEN_MAP["USDC"]?.address || "0x31d0220469e10c4E71834a79b1f276d740d3768F",
+        TOKEN_MAP["eiETH"]?.address || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6"
     ];
 
     const { data: earningsData } = useReadContracts({

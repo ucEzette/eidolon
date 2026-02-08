@@ -5,9 +5,10 @@ export const CONFIG = {
     RPC_URL: process.env.RPC_URL || "https://sepolia.unichain.org",
     PRIVATE_KEY: process.env.PRIVATE_KEY!,
     CONTRACTS: {
-        EIDOLON_HOOK: (process.env.EIDOLON_HOOK || '0x78bb3Cc9986310FB935485192adB2Fe18C5c20C8') as `0x${string}`,
-        EIDOLON_EXECUTOR: (process.env.EIDOLON_EXECUTOR || '0x1318783e1b61d173315d566003836dc850B144C2') as `0x${string}`,
-        POOL_MANAGER: (process.env.POOL_MANAGER || '0x00B036B58a818B1BC34d502D3fE730Db729e62AC') as `0x${string}`
+        EIDOLON_HOOK: process.env.EIDOLON_HOOK as `0x${string}`,
+        EIDOLON_EXECUTOR: process.env.EIDOLON_EXECUTOR as `0x${string}`,
+        POOL_MANAGER: process.env.POOL_MANAGER as `0x${string}`,
+        PERMIT2: (process.env.PERMIT2 || '0x000000000022D473030F116dDEE9F6B43aC78BA3') as `0x${string}`
     },
     POOLS: {
         canonical: {
@@ -17,9 +18,9 @@ export const CONFIG = {
     },
     TOKENS: {
         "ETH": { address: "0x0000000000000000000000000000000000000000", decimals: 18 },
-        "WETH": { address: "0x4200000000000000000000000000000000000006", decimals: 18 },
-        "USDC": { address: "0x31d0220469e10c4E71834a79b1f276d740d3768F", decimals: 6 },
-        "eiETH": { address: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", decimals: 18 }
+        "WETH": { address: process.env.WETH || "0x4200000000000000000000000000000000000006", decimals: 18 },
+        "USDC": { address: process.env.USDC || "0x31d0220469e10c4E71834a79b1f276d740d3768F", decimals: 6 },
+        "eiETH": { address: process.env.eiETH || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", decimals: 18 }
     } as Record<string, { address: string; decimals: number }>
 };
 

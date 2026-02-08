@@ -62,11 +62,11 @@ export const chains = [unichainSepolia, mainnet] as const;
 export const CONTRACTS = {
     // Unichain Sepolia testnet - DEPLOYED & VERIFIED
     unichainSepolia: {
-        eidolonHook: "0x78bb3Cc9986310FB935485192adB2Fe18C5c20C8" as `0x${string}`,
-        executor: "0x1318783e1b61d173315d566003836dc850B144C2" as `0x${string}`,
-        poolManager: "0x00B036B58a818B1BC34d502D3fE730Db729e62AC" as `0x${string}`,
-        permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as `0x${string}`,
-        quoter: "0x56dcd40a3f2d466f48e7f48bdbe5cc9b92ae4472" as `0x${string}`,
+        eidolonHook: (process.env.NEXT_PUBLIC_EIDOLON_HOOK || "0x28acad3FFb04D622DdC43EdbCa03A549BDEcA0C8") as `0x${string}`,
+        executor: (process.env.NEXT_PUBLIC_EIDOLON_EXECUTOR || "0x3f03964E372B74C72861e73e34Ede1dB55CD6E1c") as `0x${string}`,
+        poolManager: (process.env.NEXT_PUBLIC_POOL_MANAGER || "0x00B036B58a818B1BC34d502D3fE730Db729e62AC") as `0x${string}`,
+        permit2: (process.env.NEXT_PUBLIC_PERMIT2 || "0x000000000022D473030F116dDEE9F6B43aC78BA3") as `0x${string}`,
+        quoter: (process.env.NEXT_PUBLIC_QUOTER || "0x56dcd40a3f2d466f48e7f48bdbe5cc9b92ae4472") as `0x${string}`,
     }
 } as const;
 
@@ -117,9 +117,9 @@ export const POOLS = {
 
 export const TOKENS = {
     ETH: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-    WETH: "0x4200000000000000000000000000000000000006" as `0x${string}`,
-    USDC: "0x31d0220469e10c4E71834a79b1f276d740d3768F" as `0x${string}`,
-    eiETH: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6" as `0x${string}`,
+    WETH: (process.env.NEXT_PUBLIC_WETH || "0x4200000000000000000000000000000000000006") as `0x${string}`,
+    USDC: (process.env.NEXT_PUBLIC_USDC || "0x31d0220469e10c4E71834a79b1f276d740d3768F") as `0x${string}`,
+    eiETH: (process.env.NEXT_PUBLIC_eiETH || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6") as `0x${string}`,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════

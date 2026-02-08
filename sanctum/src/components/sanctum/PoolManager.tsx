@@ -26,12 +26,14 @@ const POOL_MANAGER_ABI = parseAbi([
     "function initialize((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, uint160 sqrtPriceX96) external payable returns (int24 tick)",
     "function extsload(bytes32 slot) external view returns (bytes32 value)",
     "function extsload(bytes32[] slots) external view returns (bytes32[] values)",
-    "function getSlot0(bytes32 id) external view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
+    "function slot0(bytes32 id) external view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)",
     "function swap((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes testSettings) external payable returns (int256 delta)"
 ]);
 
 const EXECUTOR_ABI = parseAbi([
-    "function execute((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData, address recipient) external payable returns (int256 delta)"
+    "function execute((address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks) key, (bool zeroForOne, int256 amountSpecified, uint160 sqrtPriceLimitX96) params, bytes hookData, address recipient) external payable returns (int256 delta)",
+    "function wrap() external payable",
+    "function unwrap(uint256 amount) external"
 ]);
 
 
@@ -77,6 +79,8 @@ const POTENTIAL_TIERS = [
     { fee: 10000, tickSpacing: 200 }, // 1%   - Exotic pairs
 ];
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 export function PoolManager() {
     const { address, isConnected } = useAccount();
     const chainId = useChainId();
@@ -86,7 +90,6 @@ export function PoolManager() {
     const { writeContractAsync } = useWriteContract();
 
     // Removed isExpanded state - Always visible
-    const [activeTab, setActiveTab] = useState<'list' | 'create' | 'swap' | 'activity'>('list'); // Tab state
 
     // Swap State
     const [swapAmount, setSwapAmount] = useState("1.0");
@@ -110,15 +113,13 @@ export function PoolManager() {
         tickSpacing: number;
         hooks: string;
     }>({
-        token0: TOKENS.find(t => t.symbol === "ETH")?.address || "0x0000000000000000000000000000000000000000",
-        token1: TOKENS.find(t => t.symbol === "USDC")?.address || "0x31d0220469e10c4E71834a79b1f276d740d3768F",
+        token0: TOKENS.find(t => t.symbol === "ETH")?.address || ZERO_ADDRESS,
+        token1: TOKENS.find(t => t.symbol === "USDC")?.address || (TOKEN_MAP["USDC"]?.address as `0x${string}`),
         fee: POOLS.canonical.fee,
         tickSpacing: POOLS.canonical.tickSpacing,
         hooks: CONTRACTS.unichainSepolia.eidolonHook
     });
 
-    // Constants for address checking
-    const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
     // Auto-Set logic removed to give users full liberty.
     /*
@@ -133,6 +134,19 @@ export function PoolManager() {
             // Optional: Auto-switch logic
         }
     }, [isConnected, isWrongNetwork, switchChain]);
+
+    type PoolTab = 'list' | 'create' | 'swap' | 'activity' | 'wrap';
+    const [poolActiveTab, setPoolActiveTab] = useState<PoolTab>('list');
+    const [wrapAmount, setWrapAmount] = useState("");
+    const [isWrapPending, setIsWrapPending] = useState(false);
+
+    // Dedicated balances for Wrap tab
+    const WETH_ADDR = TOKEN_MAP["WETH"]?.address;
+    const { data: ethBalance, refetch: refetchEth } = useBalance({ address });
+    const { data: wethBalance, refetch: refetchWeth } = useBalance({
+        address,
+        token: WETH_ADDR as `0x${string}`
+    });
 
     const handleSwitchNetwork = () => {
         if (switchChain) {
@@ -284,7 +298,7 @@ export function PoolManager() {
     const { data: slot0Data } = useReadContract({
         address: CONTRACTS.unichainSepolia.poolManager as `0x${string}`,
         abi: POOL_MANAGER_ABI,
-        functionName: 'getSlot0',
+        functionName: 'slot0',
         args: [poolId as `0x${string}`],
         chainId: unichainSepolia.id,
         query: {
@@ -573,8 +587,8 @@ export function PoolManager() {
             // IMPORTANT: The PoolID we sign must match the PoolID the bot executes against (which is WETH/USDC)
 
             // Config constants derived dynamically
-            const ETH_ADDR = TOKEN_MAP["ETH"]?.address || "0x0000000000000000000000000000000000000000";
-            const WETH_ADDR = TOKEN_MAP["WETH"]?.address || "0x4200000000000000000000000000000000000006";
+            const ETH_ADDR = TOKEN_MAP["ETH"]?.address || ZERO_ADDRESS;
+            const WETH_ADDR = TOKEN_MAP["WETH"]?.address;
 
             let t0_calc = poolConfig.token0;
             let t1_calc = poolConfig.token1;
@@ -622,12 +636,12 @@ export function PoolManager() {
                 // Using permitToken (WETH) because Executor calls transferFrom on it
                 const amountRaw = parseUnits(swapAmount, decimals);
 
-                if (publicClient) {
+                if (publicClient && inputToken !== ETH_ADDR) {
                     const allowance = await publicClient.readContract({
                         address: permitToken as `0x${string}`,
                         abi: erc20Abi,
                         functionName: 'allowance',
-                        args: [address, CONTRACTS.unichainSepolia.executor as `0x${string}`]
+                        args: [address as `0x${string}`, CONTRACTS.unichainSepolia.executor as `0x${string}`]
                     });
 
                     if (allowance < amountRaw) {
@@ -660,7 +674,8 @@ export function PoolManager() {
                     address: CONTRACTS.unichainSepolia.executor as `0x${string}`,
                     abi: EXECUTOR_ABI,
                     functionName: 'execute',
-                    args: [key, params, "0x", address] // '0x' hookData, recipient = user
+                    args: [key, params, "0x", address], // '0x' hookData, recipient = user
+                    value: inputToken === ETH_ADDR ? amountRaw : 0n
                 });
 
                 const shortHash = `${hash.slice(0, 6)}...`;
@@ -742,6 +757,77 @@ export function PoolManager() {
         }
     };
 
+    const handleWrapAction = async (isWrap: boolean) => {
+        if (!isConnected) { toast.error("Connect Wallet"); return; }
+        if (!wrapAmount || isNaN(Number(wrapAmount))) return;
+        setIsWrapPending(true);
+
+        const id = toast.loading(isWrap ? "Wrapping ETH..." : "Unwrapping WETH...");
+
+        try {
+            const amountRaw = parseUnits(wrapAmount, 18);
+            if (isWrap) {
+                const hash = await writeContractAsync({
+                    address: CONTRACTS.unichainSepolia.executor as `0x${string}`,
+                    abi: EXECUTOR_ABI,
+                    functionName: 'wrap',
+                    value: amountRaw
+                });
+
+                if (publicClient) {
+                    toast.loading("Waiting for confirmation...", { id });
+                    await publicClient.waitForTransactionReceipt({ hash });
+                }
+                toast.success("ETH Wrapped Successfully", { id });
+            } else {
+                const WETH_ADDR = TOKEN_MAP["WETH"]?.address;
+                if (publicClient) {
+                    const allowance = await publicClient.readContract({
+                        address: WETH_ADDR as `0x${string}`,
+                        abi: erc20Abi,
+                        functionName: 'allowance',
+                        args: [address as `0x${string}`, CONTRACTS.unichainSepolia.executor as `0x${string}`]
+                    });
+                    if (allowance < amountRaw) {
+                        toast.info("Approving WETH for Unwrapping...", { id });
+                        const approveHash = await writeContractAsync({
+                            address: WETH_ADDR as `0x${string}`,
+                            abi: erc20Abi,
+                            functionName: 'approve',
+                            args: [CONTRACTS.unichainSepolia.executor as `0x${string}`, amountRaw]
+                        });
+                        await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                    }
+                }
+
+                const hash = await writeContractAsync({
+                    address: CONTRACTS.unichainSepolia.executor as `0x${string}`,
+                    abi: EXECUTOR_ABI,
+                    functionName: 'unwrap',
+                    args: [amountRaw]
+                });
+
+                if (publicClient) {
+                    toast.loading("Waiting for confirmation...", { id });
+                    await publicClient.waitForTransactionReceipt({ hash });
+                }
+                toast.success("WETH Unwrapped Successfully", { id });
+            }
+            setWrapAmount("");
+            // Refresh balances
+            refetchEth();
+            refetchWeth();
+        } catch (e: any) {
+            console.error(e);
+            toast.error(isWrap ? "Wrapping Failed" : "Unwrapping Failed", {
+                id,
+                description: e.message
+            });
+        } finally {
+            setIsWrapPending(false);
+        }
+    };
+
     return (
         <div className="w-full mt-0 transition-all duration-500 ease-in-out border border-border-dark rounded-2xl overflow-hidden backdrop-blur-xl bg-card-dark shadow-glow shadow-primary/10">
             <TokenSelector
@@ -785,8 +871,8 @@ export function PoolManager() {
                         </button>
                     )}
                     <button
-                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${activeTab === 'list' ? 'bg-primary/20 border-primary text-primary' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
-                        onClick={() => setActiveTab('list')}
+                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${poolActiveTab === 'list' ? 'bg-primary/20 border-primary text-primary' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setPoolActiveTab('list')}
                     >
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-base md:text-lg">list</span>
@@ -794,8 +880,8 @@ export function PoolManager() {
                         </div>
                     </button>
                     <button
-                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${activeTab === 'create' ? 'bg-accent/20 border-accent text-accent' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
-                        onClick={() => setActiveTab('create')}
+                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${poolActiveTab === 'create' ? 'bg-accent/20 border-accent text-accent' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setPoolActiveTab('create')}
                     >
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-base md:text-lg">add_circle</span>
@@ -803,8 +889,8 @@ export function PoolManager() {
                         </div>
                     </button>
                     <button
-                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${activeTab === 'swap' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
-                        onClick={() => setActiveTab('swap')}
+                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${poolActiveTab === 'swap' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setPoolActiveTab('swap')}
                     >
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-base md:text-lg">swap_horiz</span>
@@ -812,13 +898,22 @@ export function PoolManager() {
                         </div>
                     </button>
                     <button
-                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${activeTab === 'activity' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
-                        onClick={() => setActiveTab('activity')}
+                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${poolActiveTab === 'activity' ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setPoolActiveTab('activity')}
                     >
                         <div className="flex items-center gap-2">
                             <span className="material-symbols-outlined text-base md:text-lg">history</span>
                             LOG
                             {mounted && activities.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>}
+                        </div>
+                    </button>
+                    <button
+                        className={`px-3 md:px-4 py-2 rounded-lg font-display tracking-widest text-[10px] md:text-sm transition-all duration-300 border shrink-0 ${poolActiveTab === 'wrap' ? 'bg-amber-500/20 border-amber-500 text-amber-400' : 'bg-transparent border-transparent text-text-muted hover:text-white hover:bg-white/5'}`}
+                        onClick={() => setPoolActiveTab('wrap')}
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-base md:text-lg">water_drop</span>
+                            WRAP
                         </div>
                     </button>
                 </div>
@@ -845,7 +940,7 @@ export function PoolManager() {
                 ) : (
                     <>
                         {/* Tab Content: List */}
-                        {activeTab === 'list' && (
+                        {poolActiveTab === 'list' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* Desktop Table View */}
                                 <div className="hidden md:block overflow-hidden rounded-xl border border-border-dark bg-black/20">
@@ -944,7 +1039,7 @@ export function PoolManager() {
                                                                     className={`btn btn-xs font-mono h-8 min-h-0 rounded border-white/10 hover:border-primary hover:text-primary ${isSelected ? "btn-primary text-black hover:text-black no-animation" : "btn-ghost text-text-muted"}`}
                                                                     onClick={() => {
                                                                         setPoolConfig(pool);
-                                                                        setActiveTab('create');
+                                                                        setPoolActiveTab('create');
                                                                     }}
                                                                 >
                                                                     {isSelected ? "SELECTED" : "MANAGE"}
@@ -982,7 +1077,7 @@ export function PoolManager() {
                                             <div key={i} className={`p-4 rounded-xl border transition-all ${isSelected ? "border-primary bg-primary/5 shadow-[0_0_15px_-5px_rgba(165,243,252,0.2)]" : "border-white/5 bg-white/5"}`}
                                                 onClick={() => {
                                                     setPoolConfig(pool);
-                                                    setActiveTab('create');
+                                                    setPoolActiveTab('create');
                                                 }}>
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div className="flex items-center gap-3">
@@ -1036,7 +1131,7 @@ export function PoolManager() {
                         )}
 
                         {/* Tab Content: Initialize */}
-                        {activeTab === 'create' && (
+                        {poolActiveTab === 'create' && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 {/* Left Column: Configuration */}
                                 <div className="border border-border-dark p-4 md:p-6 rounded-2xl bg-black/20">
@@ -1216,7 +1311,7 @@ export function PoolManager() {
                         )}
 
                         {/* Tab Content: Swap */}
-                        {activeTab === 'swap' && (
+                        {poolActiveTab === 'swap' && (
                             <div className="p-4 md:p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <h3 className="text-lg md:text-xl font-display text-emerald-400 mb-2 md:mb-4 tracking-widest uppercase">Test Pool Hooks</h3>
                                 <p className="text-xs md:text-sm text-text-muted mb-4 md:mb-6">
@@ -1347,7 +1442,7 @@ export function PoolManager() {
                         )}
 
                         {/* Tab Content: Activity Log */}
-                        {activeTab === 'activity' && (
+                        {poolActiveTab === 'activity' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[300px]">
                                 {mounted && activities.length > 0 ? (
                                     <div className="space-y-2 md:space-y-3">
@@ -1389,6 +1484,66 @@ export function PoolManager() {
                                         <p className="font-display tracking-[0.2em] uppercase text-[10px] md:text-sm">Void of Action</p>
                                     </div>
                                 )}
+                            </div>
+                        )}
+                        {poolActiveTab === 'wrap' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-xl mx-auto py-12">
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 backdrop-blur-md shadow-2xl">
+                                    <h3 className="text-2xl font-display text-white mb-6 flex items-center gap-3">
+                                        <span className="material-symbols-outlined text-amber-400">equalizer</span>
+                                        ETH Wrapping System
+                                    </h3>
+
+                                    <div className="space-y-6">
+                                        <div>
+                                            <div className="flex justify-between items-end mb-2">
+                                                <label className="block text-xs font-mono text-text-muted uppercase tracking-widest">Amount (ETH/WETH)</label>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <div className="text-[10px] font-mono text-text-muted">
+                                                        ETH: <span className="text-white">{ethBalance?.formatted?.slice(0, 8) || "0.00"}</span>
+                                                    </div>
+                                                    <div className="text-[10px] font-mono text-text-muted">
+                                                        WETH: <span className="text-white">{wethBalance?.formatted?.slice(0, 8) || "0.00"}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={wrapAmount}
+                                                onChange={(e) => setWrapAmount(e.target.value)}
+                                                placeholder="0.0"
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-2xl font-display text-white focus:outline-none focus:border-amber-500/50 transition-all"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <button
+                                                onClick={() => handleWrapAction(true)}
+                                                disabled={isWrapPending}
+                                                className="flex flex-col items-center justify-center p-6 bg-amber-500/10 border border-amber-500/20 rounded-xl hover:bg-amber-500/20 transition-all group"
+                                            >
+                                                <span className="material-symbols-outlined text-3xl text-amber-400 mb-2 group-hover:scale-110 transition-transform">keyboard_double_arrow_down</span>
+                                                <span className="font-display text-lg text-white">WRAP</span>
+                                                <span className="text-[10px] font-mono text-amber-400/60 uppercase">ETH ➔ WETH</span>
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleWrapAction(false)}
+                                                disabled={isWrapPending}
+                                                className="flex flex-col items-center justify-center p-6 bg-sky-500/10 border border-sky-500/20 rounded-xl hover:bg-sky-500/20 transition-all group"
+                                            >
+                                                <span className="material-symbols-outlined text-3xl text-sky-400 mb-2 group-hover:scale-110 transition-transform">keyboard_double_arrow_up</span>
+                                                <span className="font-display text-lg text-white">UNWRAP</span>
+                                                <span className="text-[10px] font-mono text-sky-400/60 uppercase">WETH ➔ ETH</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="p-4 bg-white/5 rounded-xl border border-white/5 text-xs text-text-muted leading-relaxed font-mono">
+                                            <p className="mb-2 uppercase text-amber-400/80 font-bold">Why Wrap?</p>
+                                            Permit2 signatures and Uniswap V4 "Ghost Liquidity" require ERC20 tokens. Wrapping native ETH to WETH allows it to participate in the JIT liquidity ecosystem gaslessly.
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </>

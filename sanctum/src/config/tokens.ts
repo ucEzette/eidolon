@@ -20,21 +20,21 @@ export const TOKENS: Token[] = [
     {
         symbol: "WETH",
         name: "Wrapped Ether",
-        address: "0x4200000000000000000000000000000000000006",
+        address: (process.env.NEXT_PUBLIC_WETH || "0x4200000000000000000000000000000000000006") as `0x${string}`,
         decimals: 18,
         type: "WRAP"
     },
     {
         symbol: "USDC",
         name: "USD Coin",
-        address: "0x31d0220469e10c4E71834a79b1f276d740d3768F",
+        address: (process.env.NEXT_PUBLIC_USDC || "0x31d0220469e10c4E71834a79b1f276d740d3768F") as `0x${string}`,
         decimals: 6,
         type: "STABLE"
     },
     {
         symbol: "eiETH",
         name: "Eidolon ETH",
-        address: "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6", // Deployed Address
+        address: (process.env.NEXT_PUBLIC_eiETH || "0xe02eb159eb92dd0388ecdb33d0db0f8831091be6") as `0x${string}`, // Deployed Address
         decimals: 18,
         type: "GENESIS",
         logo: "/eye_of_god.png"
