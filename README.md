@@ -1,6 +1,8 @@
 # EIDOLON Protocol 👻
 
 > **The Ethereal Liquidity Layer for Uniswap v4**
+>
+> 🌐 **Live App:** [eidolon.oneroad.app](https://eidolon.oneroad.app/)
 
 [![Uniswap v4](https://img.shields.io/badge/Uniswap-v4%20Hooks-FF007A?style=flat&logo=uniswap)](https://docs.uniswap.org/contracts/v4/overview)
 [![Unichain](https://img.shields.io/badge/Unichain-Sepolia-blue?style=flat)](https://unichain.org/)
