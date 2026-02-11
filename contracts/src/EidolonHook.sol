@@ -10,6 +10,7 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
+import {console2} from "forge-std/console2.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
@@ -17,13 +18,13 @@ import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 // ═══════════════════════════════════════════════════════════════════════════════
 // PERMIT2 IMPORTS
 // ═══════════════════════════════════════════════════════════════════════════════
-import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
+import {IAllowanceTransfer} from "permit2/src/interfaces/IAllowanceTransfer.sol";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LOCAL IMPORTS
 // ═══════════════════════════════════════════════════════════════════════════════
 import {IEidolonHook} from "./interfaces/IEidolonHook.sol";
-import {WitnessLib} from "./libraries/WitnessLib.sol";
+
 import {JITLiquidityLib} from "./libraries/JITLiquidityLib.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
@@ -39,7 +40,6 @@ import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
 contract EidolonHook is BaseHook, IEidolonHook {
     using PoolIdLibrary for PoolKey;
     using CurrencyLibrary for Currency;
-    using WitnessLib for WitnessLib.WitnessData;
     using StateLibrary for IPoolManager;
     using SafeTransferLib for ERC20;
 
@@ -49,7 +49,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
 
     /// @notice The canonical Permit2 contract
     /// @dev Set at construction, never changes
-    ISignatureTransfer public immutable PERMIT2;
+    IAllowanceTransfer public immutable PERMIT2;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // FEE CONFIGURATION
@@ -93,9 +93,13 @@ contract EidolonHook is BaseHook, IEidolonHook {
     /// @dev provider => expiry timestamp (0 = no membership)
     mapping(address => uint256) public membershipExpiry;
 
-    /// @notice Tracks used permit nonces to prevent replay attacks
+    /// @notice Tracks active sessions for providers
+    /// @dev provider => expiry timestamp
+    mapping(address => uint256) public userSessionExpiry;
+
+    /// @notice Tracks used nonces to prevent replay attacks
     /// @dev provider => nonce => used
-    mapping(address => mapping(uint256 => bool)) private _usedNonces;
+    mapping(address => mapping(uint256 => bool)) public isNonceUsed;
 
     /// @notice Tracks active materializations for atomic settlement
     /// @dev poolId => provider => MaterializationState
@@ -214,7 +218,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
         address _owner,
         address _treasury
     ) BaseHook(_poolManager) {
-        PERMIT2 = ISignatureTransfer(_permit2);
+        PERMIT2 = IAllowanceTransfer(_permit2);
         owner = _owner;
         treasury = _treasury;
     }
@@ -316,6 +320,28 @@ contract EidolonHook is BaseHook, IEidolonHook {
         emit OwnershipTransferred(oldOwner, newOwner);
     }
 
+    /// @inheritdoc IEidolonHook
+    function activateSession(
+        IAllowanceTransfer.PermitSingle calldata permit,
+        bytes calldata signature
+    ) external override {
+        // 1. Verify and Execute Permit
+        // This sets the allowance for this hook on Permit2
+        PERMIT2.permit(msg.sender, permit, signature);
+
+        // 2. Register Session
+        userSessionExpiry[msg.sender] = permit.details.expiration;
+
+        emit SessionActivated(msg.sender, permit.details.expiration);
+    }
+
+    /// @inheritdoc IEidolonHook
+    function isSessionActive(
+        address provider
+    ) public view override returns (bool) {
+        return userSessionExpiry[provider] > block.timestamp;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // HOOK PERMISSIONS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -330,8 +356,8 @@ contract EidolonHook is BaseHook, IEidolonHook {
     {
         return
             Hooks.Permissions({
-                beforeInitialize: true, // ✓ Enable to allow initialization even if flag collision occurs
-                afterInitialize: false,
+                beforeInitialize: true, // ✓ Limit initialization
+                afterInitialize: true, // ✓ Verify initialization
                 beforeAddLiquidity: false,
                 afterAddLiquidity: false,
                 beforeRemoveLiquidity: false,
@@ -355,7 +381,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
     // INITIALIZATION HOOKS
     // ═══════════════════════════════════════════════════════════════════════════
 
-    /// @notice No-op hook to allow initialization
+    /// @notice No-op hook to verify initialization
     function _beforeInitialize(
         address,
         PoolKey calldata,
@@ -364,13 +390,23 @@ contract EidolonHook is BaseHook, IEidolonHook {
         return this.beforeInitialize.selector;
     }
 
+    /// @notice Verify initialization valid
+    function _afterInitialize(
+        address,
+        PoolKey calldata,
+        uint160 sqrtPriceX96,
+        int24
+    ) internal override returns (bytes4) {
+        if (sqrtPriceX96 == 0) revert PoolNotInitialized();
+        return this.afterInitialize.selector;
+    }
+
     /// @notice Internal hook called before a swap executes
-    /// @dev Validates Ghost Permit(s) and materializes JIT liquidity
-    ///      Supports MULTI-PROVIDER aggregation: hookData can contain multiple permits
+    /// @dev Validates Ghost Session(s) and materializes JIT liquidity
     /// @param sender The address initiating the swap
     /// @param key The pool being swapped on
     /// @param params The swap parameters
-    /// @param hookData Encoded array of (GhostPermit, signature, witness) tuples
+    /// @param hookData Encoded array of GhostInstruction structs
     /// @return selector The function selector
     /// @return beforeSwapDelta The delta to apply before the swap
     /// @return lpFeeOverride Fee override (0 = use pool default)
@@ -380,6 +416,8 @@ contract EidolonHook is BaseHook, IEidolonHook {
         SwapParams calldata params,
         bytes calldata hookData
     ) internal override returns (bytes4, BeforeSwapDelta, uint24) {
+        console2.log("EidolonHook: _beforeSwap entered");
+
         // If no hookData provided, this is a normal swap - don't interfere
         if (hookData.length == 0) {
             return (
@@ -390,6 +428,20 @@ contract EidolonHook is BaseHook, IEidolonHook {
         }
 
         PoolId poolId = key.toId();
+
+        // ANCHOR CHECK: Skip if liquidity is too low (prevent manipulation of empty pools)
+        uint128 poolLiquidity = poolManager.getLiquidity(poolId);
+        // Using a conservative threshold for "initialized and active"
+        // In production, this should be value-aware.
+        if (poolLiquidity < 1000000) {
+            // Return zero delta, effectively skipping ghost logic
+            return (
+                this.beforeSwap.selector,
+                BeforeSwapDeltaLibrary.ZERO_DELTA,
+                0
+            );
+        }
+
         bytes32 poolIdBytes = PoolId.unwrap(poolId);
 
         _handleExorcism(sender, poolId, poolIdBytes);
@@ -397,14 +449,7 @@ contract EidolonHook is BaseHook, IEidolonHook {
         (
             int128 totalSpecifiedClaimed,
             int128 totalUnspecifiedClaimed
-        ) = _processGhostPermits(
-                sender,
-                key,
-                poolId,
-                poolIdBytes,
-                params,
-                hookData
-            );
+        ) = _processGhostInstructions(sender, key, params, hookData);
 
         return (
             this.beforeSwap.selector,
@@ -413,183 +458,158 @@ contract EidolonHook is BaseHook, IEidolonHook {
         );
     }
 
-    /// @notice Helper to handle anti-MEV logic
-    function _handleExorcism(
-        address sender,
-        PoolId poolId,
-        bytes32 poolIdBytes
-    ) internal {
-        SwapContext storage ctx = _swapContexts[poolIdBytes];
-        if (ctx.blockNumber == block.number) {
-            ctx.swapCount++;
-            if (ctx.swapCount >= 3 && ctx.lastSender != sender) {
-                emit ExorcismTriggered(poolId, sender);
-                revert MEVDetected();
-            }
-        } else {
-            ctx.blockNumber = block.number;
-            ctx.swapCount = 1;
-            delete _activeProviders[poolIdBytes];
-        }
-        ctx.lastSender = sender;
-    }
-
-    /// @notice Helper to process all ghost permits in beforeSwap
-    function _processGhostPermits(
-        address sender,
+    /// @notice Helper to process all ghost instructions
+    function _processGhostInstructions(
+        address, // sender (unused)
         PoolKey calldata key,
-        PoolId poolId,
-        bytes32 poolIdBytes,
         SwapParams calldata params,
         bytes calldata hookData
     )
         internal
         returns (int128 totalSpecifiedClaimed, int128 totalUnspecifiedClaimed)
     {
-        (
-            GhostPermit[] memory permits,
-            bytes[] memory signatures,
-            WitnessLib.WitnessData[] memory witnesses
-        ) = abi.decode(
-                hookData,
-                (GhostPermit[], bytes[], WitnessLib.WitnessData[])
-            );
+        GhostInstruction[] memory instructions = abi.decode(
+            hookData,
+            (GhostInstruction[])
+        );
+
+        PoolId poolId = key.toId();
+        bytes32 poolIdBytes = PoolId.unwrap(poolId);
 
         bool isSameBlock = _swapContexts[poolIdBytes].blockNumber ==
             block.number;
         uint256 swapCount = _swapContexts[poolIdBytes].swapCount;
-
-        // Determine JIT direction
-        // If swap is ZeroForOne (selling 0), we provide 1 (Buy 0) -> Price Down range
-        // If swap is OneForZero (selling 1), we provide 0 (Buy 1) -> Price Up range
         bool isZeroForOne = params.zeroForOne;
         (, int24 currentTick, , ) = poolManager.getSlot0(poolId);
 
-        for (uint256 i = 0; i < permits.length; i++) {
-            GhostPermit memory permit = permits[i];
-
-            // 1. Validation
-            // ZeroForOne (selling 0): we facilitate by buying 0, so we provide 1 (eiETH).
-            // OneForZero (selling 1): we facilitate by buying 1, so we provide 0 (WETH).
-            if (
-                block.timestamp > permit.deadline ||
-                _usedNonces[permit.provider][permit.nonce] ||
-                witnesses[i].poolId != poolIdBytes ||
-                witnesses[i].hook != address(this) ||
-                (isZeroForOne &&
-                    Currency.unwrap(permit.currency) !=
-                    Currency.unwrap(key.currency1)) ||
-                (!isZeroForOne &&
-                    Currency.unwrap(permit.currency) !=
-                    Currency.unwrap(key.currency0))
-            ) {
-                continue;
-            }
-
-            // 2. Calculate JIT Position
-            (
-                int24 tickLower,
-                int24 tickUpper,
-                uint128 liquidity
-            ) = JITLiquidityLib.calculateJITPosition(
-                    key,
-                    currentTick,
-                    permit.amount,
-                    isZeroForOne,
-                    permit.currency
-                );
-
-            if (liquidity == 0) continue;
-
-            // 3. State Updates
-            _usedNonces[permit.provider][permit.nonce] = true;
-            _activeProviders[poolIdBytes].push(permit.provider);
-
-            _materializations[poolIdBytes][
-                permit.provider
-            ] = MaterializationState({
-                amount: permit.amount,
-                liquidity: liquidity,
-                tickLower: tickLower,
-                tickUpper: tickUpper,
-                initialBalance0: key.currency0.balanceOfSelf(),
-                initialBalance1: key.currency1.balanceOfSelf(),
-                currency: permit.currency,
-                providerType: permit.isDualSided
-                    ? ProviderType.DUAL_SIDED
-                    : ProviderType.SINGLE_SIDED,
-                active: true
-            });
-
-            if (isSameBlock && swapCount >= 2) {
-                botKillCount[permit.provider]++;
-            }
-
-            // 4. Interactions (Pull Funds -> Transfer to Swapper -> Mint Liquidity)
-            _pullFundsWithWitness(permit, signatures[i], witnesses[i]);
-
-            // Transfer to Swapper (sender) to allow them to settle the primary swap
-            // Use safeTransfer to ensure success
-            ERC20(Currency.unwrap(permit.currency)).safeTransfer(
-                sender,
-                permit.amount
-            );
-
-            // MINT JIT LIQUIDITY
-            (BalanceDelta delta, ) = poolManager.modifyLiquidity(
+        for (uint256 i = 0; i < instructions.length; i++) {
+            _processSingleInstruction(
+                instructions[i],
                 key,
-                ModifyLiquidityParams({
-                    tickLower: tickLower,
-                    tickUpper: tickUpper,
-                    liquidityDelta: int256(uint256(liquidity)),
-                    salt: bytes32(0)
-                }),
-                bytes("") // No callback data needed
-            );
-
-            // PAY FOR JIT
-            // We settle exactly what the PoolManager expects for the liquidity provision.
-            if (delta.amount0() < 0) {
-                uint256 amountToSettle = uint256(int256(-delta.amount0()));
-                poolManager.sync(key.currency0);
-                key.currency0.transfer(address(poolManager), amountToSettle);
-                poolManager.settle();
-            }
-            if (delta.amount1() < 0) {
-                uint256 amountToSettle = uint256(int256(-delta.amount1()));
-                poolManager.sync(key.currency1);
-                key.currency1.transfer(address(poolManager), amountToSettle);
-                poolManager.settle();
-            }
-
-            emit LiquidityMaterialized(
-                permit.provider,
                 poolId,
-                permit.amount,
-                0
+                poolIdBytes,
+                currentTick,
+                isZeroForOne,
+                isSameBlock,
+                swapCount
             );
         }
 
-        // JIT does not return a swap delta to the Swapper
         return (0, 0);
+    }
+
+    function _processSingleInstruction(
+        GhostInstruction memory instr,
+        PoolKey calldata key,
+        PoolId poolId,
+        bytes32 poolIdBytes,
+        int24 currentTick,
+        bool isZeroForOne,
+        bool isSameBlock,
+        uint256 swapCount
+    ) internal {
+        // 1. Session Validation
+        if (userSessionExpiry[instr.provider] <= block.timestamp) {
+            return; // Session expired
+        }
+
+        // 1.5 Nonce Validation (Replay Protection)
+        if (isNonceUsed[instr.provider][instr.nonce]) {
+            revert InvalidNonce(instr.nonce);
+        }
+        isNonceUsed[instr.provider][instr.nonce] = true;
+
+        // 2. Currency Validation
+        if (
+            (isZeroForOne &&
+                Currency.unwrap(instr.currency) !=
+                Currency.unwrap(key.currency1)) ||
+            (!isZeroForOne &&
+                Currency.unwrap(instr.currency) !=
+                Currency.unwrap(key.currency0))
+        ) {
+            return;
+        }
+
+        // 3. Calculate JIT Position
+        (int24 tickLower, int24 tickUpper, uint128 liquidity) = JITLiquidityLib
+            .calculateJITPosition(
+                key,
+                currentTick,
+                instr.amount,
+                isZeroForOne,
+                instr.currency
+            );
+
+        if (liquidity == 0) return;
+
+        // 4. State Updates
+        _activeProviders[poolIdBytes].push(instr.provider);
+
+        _materializations[poolIdBytes][instr.provider] = MaterializationState({
+            amount: instr.amount,
+            liquidity: liquidity,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            initialBalance0: key.currency0.balanceOfSelf(),
+            initialBalance1: key.currency1.balanceOfSelf(),
+            currency: instr.currency,
+            providerType: instr.isDualSided
+                ? ProviderType.DUAL_SIDED
+                : ProviderType.SINGLE_SIDED,
+            active: true
+        });
+
+        if (isSameBlock && swapCount >= 2) {
+            botKillCount[instr.provider]++;
+        }
+
+        // 5. Interactions (Pull Funds -> Mint Liquidity)
+        // Use Permit2 transferFrom
+        PERMIT2.transferFrom(
+            instr.provider,
+            address(this),
+            uint160(instr.amount),
+            Currency.unwrap(instr.currency)
+        );
+
+        // MINT JIT LIQUIDITY
+        (BalanceDelta delta, ) = poolManager.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                liquidityDelta: int256(uint256(liquidity)),
+                salt: bytes32(0)
+            }),
+            bytes("") // No callback data needed
+        );
+
+        // PAY FOR JIT
+        if (delta.amount0() < 0) {
+            uint256 amountToSettle = uint256(int256(-delta.amount0()));
+            poolManager.sync(key.currency0);
+            key.currency0.transfer(address(poolManager), amountToSettle);
+            poolManager.settle();
+        }
+        if (delta.amount1() < 0) {
+            uint256 amountToSettle = uint256(int256(-delta.amount1()));
+            poolManager.sync(key.currency1);
+            key.currency1.transfer(address(poolManager), amountToSettle);
+            poolManager.settle();
+        }
+
+        emit LiquidityMaterialized(instr.provider, poolId, instr.amount, 0);
     }
 
     /// @notice Internal hook called after a swap executes
     /// @dev Settles all active providers, takes protocol fee, and returns funds
-    ///      Supports MULTI-PROVIDER: processes all providers tracked in beforeSwap
-    /// @param sender The address that initiated the swap
-    /// @param key The pool that was swapped on
-    /// @param params The swap parameters
-    /// @param delta The balance changes from the swap
-    /// @param hookData The same hookData from beforeSwap (unused - we use _activeProviders)
-    /// @return selector The function selector
-    /// @return afterSwapDelta The delta to apply after the swap
     function _afterSwap(
-        address sender,
+        address,
         PoolKey calldata key,
-        SwapParams calldata params,
-        BalanceDelta delta,
-        bytes calldata hookData
+        SwapParams calldata,
+        BalanceDelta,
+        bytes calldata
     ) internal override returns (bytes4, int128) {
         PoolId poolId = key.toId();
         bytes32 poolIdBytes = PoolId.unwrap(poolId);
@@ -683,6 +703,10 @@ contract EidolonHook is BaseHook, IEidolonHook {
                     }
                 }
             }
+            // INVARIANT CHECK: Atomic Guard
+            else if (principalReturned < state.amount) {
+                revert AtomicGuardViolation(state.amount, principalReturned);
+            }
 
             // To satisfy "funds never remain in contract", we return all remaining deltas to the provider.
             state.active = false;
@@ -692,11 +716,6 @@ contract EidolonHook is BaseHook, IEidolonHook {
             if (amount1Received > 0)
                 _returnFunds(provider, key.currency1, amount1Received);
 
-            // Hook Solvency Check: Ensure we don't end with a negative delta in the PoolManager.
-            // In V4, we can check this by ensuring we don't have outstanding debts for this pool.
-            // For now, we loosen the individual balance check to allow token conversion.
-            // If Token0 was swapped for Token1, balance0 decreases but balance1 increases.
-
             emit LiquiditySettled(provider, poolId, state.amount, 0);
         }
 
@@ -704,50 +723,6 @@ contract EidolonHook is BaseHook, IEidolonHook {
         delete _activeProviders[poolIdBytes];
 
         return (this.afterSwap.selector, 0);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // INTERNAL FUNCTIONS
-    // ═══════════════════════════════════════════════════════════════════════════
-
-    /// @notice Pulls funds from provider using Permit2 with Witness verification
-    /// @dev This is the core security mechanism - signature is only valid for this pool
-    /// @param permit The Ghost Permit containing authorization details
-    /// @param signature The EIP-712 signature from the provider
-    /// @param witness The witness data binding signature to pool context
-    function _pullFundsWithWitness(
-        GhostPermit memory permit,
-        bytes memory signature,
-        WitnessLib.WitnessData memory witness
-    ) internal {
-        // Construct the Permit2 transfer details
-        ISignatureTransfer.PermitTransferFrom
-            memory permitTransfer = ISignatureTransfer.PermitTransferFrom({
-                permitted: ISignatureTransfer.TokenPermissions({
-                    token: Currency.unwrap(permit.currency),
-                    amount: permit.amount
-                }),
-                nonce: permit.nonce,
-                deadline: permit.deadline
-            });
-
-        ISignatureTransfer.SignatureTransferDetails
-            memory transferDetails = ISignatureTransfer
-                .SignatureTransferDetails({
-                    to: address(this),
-                    requestedAmount: permit.amount
-                });
-
-        // Execute the transfer with witness verification
-        // The signature is only valid if the witness data matches
-        PERMIT2.permitWitnessTransferFrom(
-            permitTransfer,
-            transferDetails,
-            permit.provider,
-            WitnessLib.hash(witness),
-            WitnessLib.WITNESS_TYPE_STRING,
-            signature
-        );
     }
 
     /// @notice Gets the protocol fee for a provider based on type and membership
@@ -790,6 +765,27 @@ contract EidolonHook is BaseHook, IEidolonHook {
         }
     }
 
+    /// @notice Helper to handle anti-MEV logic
+    function _handleExorcism(
+        address sender,
+        PoolId poolId,
+        bytes32 poolIdBytes
+    ) internal {
+        SwapContext storage ctx = _swapContexts[poolIdBytes];
+        if (ctx.blockNumber == block.number) {
+            ctx.swapCount++;
+            if (ctx.swapCount >= 3 && ctx.lastSender != sender) {
+                emit ExorcismTriggered(poolId, sender);
+                revert MEVDetected();
+            }
+        } else {
+            ctx.blockNumber = block.number;
+            ctx.swapCount = 1;
+            delete _activeProviders[poolIdBytes];
+        }
+        ctx.lastSender = sender;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // VIEW FUNCTIONS
     // ═══════════════════════════════════════════════════════════════════════════
@@ -800,12 +796,8 @@ contract EidolonHook is BaseHook, IEidolonHook {
     }
 
     /// @inheritdoc IEidolonHook
-    function isPermitUsed(
-        address provider,
-        uint256 nonce
-    ) external view override returns (bool) {
-        return _usedNonces[provider][nonce];
-    }
+
+    // Removed legacy isPermitUsed
 
     // ═══════════════════════════════════════════════════════════════════════════
     // RECEIVE ETH

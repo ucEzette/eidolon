@@ -146,6 +146,7 @@ library JITLiquidityLib {
                 sqrtRatioBX96,
                 FixedPoint96.Q96
             );
+
             liquidity = uint128(
                 FullMath.mulDiv(
                     amount,
@@ -154,6 +155,10 @@ library JITLiquidityLib {
                 )
             );
         }
+
+        // SAFETY: Subtract 1 wei of liquidity to account for rounding up in PoolManager
+        // This prevents the case where required amount > instr.amount by 1 wei.
+        if (liquidity > 0) liquidity -= 1;
     }
 
     /// @notice Rounds tick down to nearest spacing

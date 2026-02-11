@@ -97,7 +97,7 @@ const EXECUTOR_ABI = [
 // ABI for checking if a permit nonce was used on-chain
 const HOOK_ABI = [
     {
-        name: 'isPermitUsed',
+        name: 'isNonceUsed',
         type: 'function',
         stateMutability: 'view',
         inputs: [
@@ -176,139 +176,72 @@ export class Executor {
             // NOTE: Usually a swap trigger might NOT need a permit if it's a direct swap,
             // but in Eidolon, the bot triggers a swap *behalf of* the user, so it NEEDS the user's permit.
             const allIntents = [order, ...bundledLiquidity];
-            const permits: any[] = [];
-            const signatures: `0x${string}`[] = [];
-            const witnesses: any[] = [];
+            const validIntents: GhostPosition[] = [];
 
             console.log("\n🔍 STARTING LOCAL VERIFICATION FOR ALL INTENTS 🔍\n");
 
             for (const intent of allIntents) {
-                const iTokenA = normalize(intent.tokenA);
-                const iDecimalsA = getDecimals(iTokenA);
-                const iWitness = {
-                    poolId: intent.poolId as `0x${string}`,
-                    hook: (intent.hookAddress || CONFIG.CONTRACTS.EIDOLON_HOOK) as `0x${string}`
-                };
-
-                console.log(`\n--- DEBUG VERIFICATION [${intent.id.slice(0, 8)}] ---`);
-                console.log(`Signer/Provider: ${intent.provider}`);
-                console.log(`Token: ${iTokenA} (${iDecimalsA} decimals)`);
-                console.log(`Amount (raw): ${intent.amountA}`);
-                console.log(`Amount (parsed): ${parseUnits(intent.amountA.toString(), iDecimalsA)}`);
-                console.log(`Spender: ${iWitness.hook}`);
-                console.log(`Nonce: ${intent.nonce}`);
-                console.log(`Deadline: ${Math.floor(intent.expiry / 1000)}`);
-                console.log(`PoolId: ${iWitness.poolId}`);
-                console.log(`Hook: ${iWitness.hook}`);
-                console.log(`Signature: ${intent.signature.slice(0, 20)}...`);
-
-                const isValid = await this.client.verifyTypedData({
-                    address: intent.provider as `0x${string}`,
-                    domain: {
-                        name: 'Permit2',
-                        chainId: unichainSepolia.id,
-                        verifyingContract: CONFIG.CONTRACTS.PERMIT2,
-                    },
-                    types: {
-                        PermitWitnessTransferFrom: [
-                            { name: "permitted", type: "TokenPermissions" },
-                            { name: "spender", type: "address" },
-                            { name: "nonce", type: "uint256" },
-                            { name: "deadline", type: "uint256" },
-                            { name: "witness", type: "WitnessData" }
-                        ],
-                        TokenPermissions: [
-                            { name: "token", type: "address" },
-                            { name: "amount", type: "uint256" }
-                        ],
-                        WitnessData: [
-                            { name: "poolId", type: "bytes32" },
-                            { name: "hook", type: "address" }
-                        ]
-                    },
-                    primaryType: 'PermitWitnessTransferFrom',
-                    message: {
-                        permitted: {
-                            token: iTokenA as `0x${string}`,
-                            amount: parseUnits(intent.amountA.toString(), iDecimalsA)
-                        },
-                        spender: iWitness.hook,
-                        nonce: BigInt(intent.nonce),
-                        deadline: BigInt(Math.floor(intent.expiry / 1000)),
-                        witness: iWitness
-                    },
-                    signature: intent.signature as Hex
-                });
-
-                console.log(`   🔍 Intent [${intent.id.slice(0, 8)}] Result: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
-
-                if (!isValid) {
-                    try {
-                        const recovered = await import('viem').then(m => m.recoverTypedDataAddress({
-                            domain: {
-                                name: 'Permit2',
-                                chainId: unichainSepolia.id,
-                                verifyingContract: CONFIG.CONTRACTS.PERMIT2,
-                            },
-                            types: {
-                                PermitWitnessTransferFrom: [
-                                    { name: "permitted", type: "TokenPermissions" },
-                                    { name: "spender", type: "address" },
-                                    { name: "nonce", type: "uint256" },
-                                    { name: "deadline", type: "uint256" },
-                                    { name: "witness", type: "WitnessData" }
-                                ],
-                                TokenPermissions: [
-                                    { name: "token", type: "address" },
-                                    { name: "amount", type: "uint256" }
-                                ],
-                                WitnessData: [
-                                    { name: "poolId", type: "bytes32" },
-                                    { name: "hook", type: "address" }
-                                ]
-                            },
-                            primaryType: 'PermitWitnessTransferFrom',
-                            message: {
-                                permitted: {
-                                    token: iTokenA as `0x${string}`,
-                                    amount: parseUnits(intent.amountA.toString(), iDecimalsA)
-                                },
-                                spender: iWitness.hook,
-                                nonce: BigInt(intent.nonce),
-                                deadline: BigInt(Math.floor(intent.expiry / 1000)),
-                                witness: iWitness
-                            },
-                            signature: intent.signature as Hex
-                        }));
-                        console.log(`      ⚠️  [DEBUG] EOA Recovered: ${recovered} (Expected: ${intent.provider})`);
-                        console.log(`      ⚠️  [DEBUG] If this mismatch persists, it might be an EIP-1271 wallet.`);
-                    } catch (e) {
-                        console.log(`      ⚠️  [DEBUG] Recovery failed: ${e}`);
-                    }
+                if (!intent.permit) {
+                    console.warn(`   ⚠️  Intent [${intent.id.slice(0, 8)}] missing 'permit' object. Skipping.`);
+                    continue;
                 }
 
-                if (isValid) {
-                    permits.push({
-                        id: intent.id, // Keep track of ID for settlement
-                        provider: intent.provider as `0x${string}`,
-                        currency: iTokenA as `0x${string}`,
-                        amount: parseUnits(intent.amountA, iDecimalsA),
-                        poolId: intent.poolId as `0x${string}`,
-                        deadline: BigInt(Math.floor(intent.expiry / 1000)),
-                        nonce: BigInt(intent.nonce),
-                        isDualSided: intent.liquidityMode === 'dual-sided'
+                console.log(`\n--- DEBUG VERIFICATION [${intent.id.slice(0, 8)}] ---`);
+                console.log(`Signer: ${intent.provider}`);
+                console.log(`Nonce: ${intent.permit.details.nonce}`);
+                console.log(`Expiry: ${intent.permit.details.expiration}`);
+
+                try {
+                    const isValid = await this.client.verifyTypedData({
+                        address: intent.provider as `0x${string}`,
+                        domain: {
+                            name: 'Permit2',
+                            chainId: unichainSepolia.id,
+                            verifyingContract: CONFIG.CONTRACTS.PERMIT2,
+                        },
+                        types: {
+                            PermitSingle: [
+                                { name: "details", type: "PermitDetails" },
+                                { name: "spender", type: "address" },
+                                { name: "sigDeadline", type: "uint256" }
+                            ],
+                            PermitDetails: [
+                                { name: "token", type: "address" },
+                                { name: "amount", type: "uint160" },
+                                { name: "expiration", type: "uint48" },
+                                { name: "nonce", type: "uint48" }
+                            ]
+                        },
+                        primaryType: 'PermitSingle',
+                        message: intent.permit,
+                        signature: intent.signature as Hex
                     });
-                    signatures.push(intent.signature as `0x${string}`);
-                    witnesses.push(iWitness);
-                } else {
-                    console.warn(`   ⚠️  Intent [${intent.id.slice(0, 8)}] failed verification. Skipping.`);
+
+                    console.log(`   🔍 Intent Result: ${isValid ? "✅ VALID" : "❌ INVALID"}`);
+
+                    if (isValid) {
+                        validIntents.push(intent);
+                    } else {
+                        console.warn(`   ⚠️  Signature invalid for [${intent.id}]`);
+                    }
+                } catch (e) {
+                    console.error(`   ❌ Verification Error for [${intent.id}]:`, e);
                 }
             }
 
-            if (permits.length === 0) {
+            if (validIntents.length === 0) {
                 console.error("❌ CRITICAL: No valid permits found for execution.");
                 return null;
             }
+
+            // 2. Prepare Hook Data (GhostInstructions)
+            const instructions = validIntents.map(intent => ({
+                provider: intent.provider as `0x${string}`,
+                currency: normalize(intent.tokenA) as `0x${string}`, // Use normalized token address
+                amount: BigInt(intent.amountA), // Raw amount string to BigInt
+                nonce: BigInt(intent.nonce),
+                isDualSided: intent.liquidityMode === 'dual-sided'
+            }));
 
             const hookData = encodeAbiParameters(
                 [
@@ -317,30 +250,14 @@ export class Executor {
                             { name: 'provider', type: 'address' },
                             { name: 'currency', type: 'address' },
                             { name: 'amount', type: 'uint256' },
-                            { name: 'poolId', type: 'bytes32' },
-                            { name: 'deadline', type: 'uint256' },
                             { name: 'nonce', type: 'uint256' },
                             { name: 'isDualSided', type: 'bool' }
                         ],
-                        name: 'permits',
-                        type: 'tuple[]'
-                    },
-                    { name: 'signatures', type: 'bytes[]' },
-                    {
-                        components: [
-                            { name: 'poolId', type: 'bytes32' },
-                            { name: 'hook', type: 'address' }
-                        ],
-                        name: 'witnesses',
+                        name: 'instructions',
                         type: 'tuple[]'
                     }
                 ],
-                [
-                    // EidolonHook.sol uses uint256 for amount in GhostPermit struct
-                    permits.map(p => ({ ...p, amount: BigInt(p.amount) })),
-                    signatures,
-                    witnesses
-                ]
+                [instructions]
             );
 
             // 3. Prepare PoolKey
@@ -520,13 +437,13 @@ export class Executor {
             // CRITICAL: Verify on-chain which permits were actually consumed
             // The hook can silently skip permits for validation failures
             const actuallySettledIds: string[] = [];
-            for (const p of permits) {
+            for (const p of validIntents) {
                 try {
                     const isUsed = await withRetry(() => this.client.readContract({
                         address: CONFIG.CONTRACTS.EIDOLON_HOOK as `0x${string}`,
                         abi: HOOK_ABI,
-                        functionName: 'isPermitUsed',
-                        args: [p.provider, p.nonce]
+                        functionName: 'isNonceUsed',
+                        args: [p.provider, BigInt(p.nonce)]
                     }), `CheckNonce_${p.id.slice(0, 8)}`);
                     if (isUsed) {
                         actuallySettledIds.push(p.id);

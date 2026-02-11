@@ -18,13 +18,14 @@ export interface GhostPosition {
     type: 'liquidity' | 'swap'; // [NEW] Distinguish intent type
     timestamp: number;
     liquidityMode: 'one-sided' | 'dual-sided';
-    nonce: string;
+    nonce: string; // Nonce for the Ghost Instruction (unique per provider)
     provider: string; // Address of the signer
     poolId: string; // Pool ID
     fee: number;
     tickSpacing: number;
     hookAddress: string;
     txHash?: string;
+    permit?: any; // The full PermitSingle struct
 }
 
 export class Monitor {
@@ -32,6 +33,7 @@ export class Monitor {
     private processedIds: Set<string> = new Set();
     private RELAYER_URL = process.env.RELAYER_URL || 'http://localhost:3000/api/relayer/orders';
     private redisSubscriber: Redis;
+    private redisClient: Redis;
     private executor: Executor;
 
     constructor() {
@@ -45,6 +47,7 @@ export class Monitor {
             // console.warn("Redis connection warning (using fallback polling):", err.message);
         });
 
+        this.redisClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
         this.executor = new Executor();
     }
 
@@ -131,6 +134,31 @@ export class Monitor {
         await this.processOrder(order);
     }
 
+
+    private async fetchGhostSessions(): Promise<any[]> {
+        try {
+            const keys = await this.redisClient.keys('ghost:session:*');
+            if (keys.length === 0) return [];
+
+            const sessions = await this.redisClient.mget(keys);
+            return sessions
+                .filter(s => s !== null)
+                .map(s => JSON.parse(s!))
+                .map(s => ({
+                    ...s,
+                    type: 'liquidity', // Treat as liquidity intent
+                    id: 'session-' + s.provider?.slice(0, 8), // Hacky ID
+                    provider: s.provider,
+                    status: 'Active',
+                    expiry: s.permit?.details?.expiration || 0,
+                    nonce: s.permit?.details?.nonce?.toString() || '0'
+                }));
+        } catch (e) {
+            console.error("Failed to fetch Ghost Sessions:", e);
+            return [];
+        }
+    }
+
     private async fetchOrders(): Promise<GhostPosition[]> {
         try {
             const response = await axios.get(this.RELAYER_URL);
@@ -148,17 +176,24 @@ export class Monitor {
         console.log(`🔮 EXORCISING Swap Intent [${order.id.slice(0, 8)}]...`);
         console.log(`   Token: ${order.tokenA} -> Amount: ${order.amountA}`);
 
-        // [NEW] Fetch matching Ghost Liquidity to bundle with this swap
-        const allOrders = await this.fetchOrders();
-        const poolLiquidity = allOrders.filter(o =>
-            o.type === 'liquidity' &&
-            o.status === 'Active' &&
-            o.poolId === order.poolId &&
-            o.expiry > Date.now()
+        const allGhostSessions = await this.fetchGhostSessions();
+
+        // Filter for matching tokens (Simple version: checks if permit token matches swap token)
+        const poolLiquidity = allGhostSessions.filter(l =>
+            // Logic: If user swaps Token A, we need Token A liquidity? 
+            // Providing liquidity means providing BOTH or ONE side.
+            // If Ghost is one-sided, it must match the token user is swapping INTO? No, user swaps A->B.
+            // User gives A, takes B.
+            // Provider gives B? Or User swaps against JIT liquidity?
+            // If JIT provider gives liquidity, they provide both or single.
+            // If user sells A for B.
+            // Provider must provide B (and A).
+            // Let's assume matches if ANY token matches.
+            l.permit.details.token === order.tokenA || l.permit.details.token === order.tokenB
         );
 
         if (poolLiquidity.length > 0) {
-            console.log(`   🌊 Found ${poolLiquidity.length} Ghost Liquidity matching intents. Bundling JIT...`);
+            console.log(`   🌊 Found ${poolLiquidity.length} Ghost Liquidity matching intents.`);
         }
 
         // Pass to Executor with bundled liquidity

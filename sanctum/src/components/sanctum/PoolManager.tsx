@@ -81,6 +81,9 @@ const POTENTIAL_TIERS = [
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
+import { GhostSessionControl } from "./GhostSessionControl";
+import { useGhostSession } from "@/hooks/useGhostSession";
+
 export function PoolManager() {
     const { address, isConnected } = useAccount();
     const chainId = useChainId();
@@ -555,6 +558,7 @@ export function PoolManager() {
     // Hooks for Intent-Based Swapping
     const { signPermit } = useGhostPermit();
     const { addPosition } = useGhostPositions();
+    const { isSessionActive } = useGhostSession();
 
     const handleSwap = async () => {
         if (!isConnected || !address) {
@@ -697,36 +701,33 @@ export function PoolManager() {
                 return;
             } // --- END DIRECT MODE ---
 
-            // Map Native ETH to WETH for signing (Permit2/Hook requirement)
-            const tokenToSign = (permitToken as string) === ETH_ADDR
-                ? WETH_ADDR as `0x${string}` // WETH on Unichain Sepolia
-                : permitToken as `0x${string}`;
+            // --- SESSION-BASED INTENT MODE ---
 
-            const result = await signPermit(
-                tokenToSign,
-                swapAmount,
-                poolId,
-                false, // One-sided liquidity (User just wants to swap, effectively providing 1-sided to the pool temporarily)
-                30,    // 30 minutes validity
-                decimals
-            );
+            if (!isSessionActive) {
+                toast.error("Ghost Session Required", {
+                    description: "Please start a Ghost Session to trade gaslessly.",
+                });
+                return;
+            }
 
-            if (!result) return; // User rejected or failed
 
-            // 3. Post Intent to Relayer
-            // The Bot will pick this up, see it matches the pool, and execute the swap
-            // In a real JIT Swap, the Bot basically "fills" this order.
+            const permitTokenAddr = (permitToken as string) === ETH_ADDR ? WETH_ADDR : permitToken;
 
+            // Calculate expiry (30 mins validity for the intent)
+            const intentExpiry = Date.now() + 30 * 60 * 1000;
+
+            // Add Position (Intent) via Hook (Relayer)
+            // We use specific signature "0x" to indicate Session-Auth
             addPosition({
-                tokenA: permitToken, // Use Full Address
-                tokenB: zeroForOne ? poolConfig.token1 : poolConfig.token0, // Target (Output)
+                tokenA: permitTokenAddr as string,
+                tokenB: zeroForOne ? poolConfig.token1 : poolConfig.token0,
                 amountA: swapAmount,
                 amountB: "0",
-                expiry: Number(result.deadline) * 1000, // Use EXACT deadline from signature
-                signature: result.signature,
-                liquidityMode: 'one-sided', // Swaps are inherently one-sided inputs
-                type: 'swap', // [NEW] Identify as intentional swap
-                nonce: result.nonce.toString(),
+                expiry: intentExpiry,
+                signature: "0x", // Session Authorization
+                liquidityMode: 'one-sided',
+                type: 'swap',
+                nonce: crypto.randomUUID(),
                 provider: address,
                 poolId: poolId,
                 fee: poolConfig.fee,
@@ -735,15 +736,15 @@ export function PoolManager() {
             });
 
             toast.success("Swap Intent Submitted", {
-                description: `Bot will execute swap: ${swapAmount} ${inputSymbol} -> ${zeroForOne ? sym1 : sym0}`
+                description: `Bot will execute swap using Active Session.`
             });
 
             // Add Activity
             const newActivity: Activity = {
                 id: crypto.randomUUID(),
                 type: 'SWAP',
-                description: `Intent: Swap ${swapAmount} ${inputSymbol}`,
-                hash: "Pending...", // Bot will provide hash
+                description: `Ghost Swap: ${swapAmount} ${inputSymbol}`,
+                hash: "Pending...",
                 timestamp: Date.now()
             };
             setActivities(prev => [newActivity, ...prev]);
@@ -1313,6 +1314,9 @@ export function PoolManager() {
                         {/* Tab Content: Swap */}
                         {poolActiveTab === 'swap' && (
                             <div className="p-4 md:p-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="mb-6">
+                                    <GhostSessionControl />
+                                </div>
 
                                 <div className="space-y-4 md:space-y-6 max-w-md mx-auto">
                                     {/* Input Field */}
