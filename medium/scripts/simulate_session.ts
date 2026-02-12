@@ -5,7 +5,7 @@ import axios from 'axios';
 // Mock Config from medium/src/config.ts
 const CONFIG = {
     CONTRACTS: {
-        EIDOLON_HOOK: '0x28acad3FFb04D622DdC43EdbCa03A549BDEcA0C8',
+        EIDOLON_HOOK: '0x296bA69b1F79d0eb0Ca812C5cf58FC2f4C0Bb0C8',
         PERMIT2: '0x000000000022D473030F116dDEE9F6B43aC78BA3'
     }
 };

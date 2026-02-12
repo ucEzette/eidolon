@@ -88,13 +88,15 @@ contract AddLiquidity is Script {
         // ═══════════════════════════════════════════════════════════════════
         // 3. Add Liquidity to WETH/eiETH Pool
         // ═══════════════════════════════════════════════════════════════════
+        // 3. Add Liquidity to WETH/eiETH Pool (Full range)
+        int24 tickLower = -887220;
+        int24 tickUpper = 887220;
+
         console2.log("Adding liquidity to WETH/eiETH pool...");
-        provider.addLiquiditySimple(
-            WETH,
-            EI_ETH,
-            FEE,
-            TICK_SPACING,
-            HOOK,
+        provider.addLiquidity(
+            wethEiethKey,
+            tickLower,
+            tickUpper,
             0.05e18, // 0.05 WETH
             0.1e18 // 0.1 eiETH
         );
@@ -104,12 +106,10 @@ contract AddLiquidity is Script {
         // 4. Add Liquidity to USDC/WETH Pool
         // ═══════════════════════════════════════════════════════════════════
         console2.log("Adding liquidity to USDC/WETH pool...");
-        provider.addLiquiditySimple(
-            USDC,
-            WETH,
-            FEE,
-            TICK_SPACING,
-            HOOK,
+        provider.addLiquidity(
+            usdcWethKey,
+            tickLower,
+            tickUpper,
             40e6, // 40 USDC
             0.05e18 // 0.05 WETH
         );

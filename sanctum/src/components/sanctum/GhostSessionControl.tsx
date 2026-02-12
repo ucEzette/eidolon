@@ -1,35 +1,95 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGhostSession } from '@/hooks/useGhostSession';
 import { toast } from 'sonner';
-import { Loader2, Ghost, Clock } from 'lucide-react';
-import { useAccount } from 'wagmi';
-import { TOKENS } from '@/config/web3';
+import { Loader2, Ghost, Clock, CheckCircle2 } from 'lucide-react';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { TOKENS, CONTRACTS } from '@/config/web3';
+import { parseAbi } from 'viem';
+
+// ABI for EidolonHook.activateSession
+const HOOK_ABI = parseAbi([
+    'function activateSession((((address,uint160,uint48,uint48),address,uint256),bytes) calldata params) external',
+    // Note: The function signature in Solidity takes (PermitSingle, bytes).
+    // Wagmi/Viem might handle the struct tuple flattening.
+    // Correct Signature: activateSession(( (address,uint160,uint48,uint48), address, uint256 ), bytes)
+    'function activateSession(((address token, uint160 amount, uint48 expiration, uint48 nonce) details, address spender, uint256 sigDeadline) permit, bytes signature) external'
+]);
 
 export function GhostSessionControl() {
-    const { activateSession, isPending, sessionExpiry, clearSession } = useGhostSession();
+    const { activateSession: signSession, isPending: isSigning, sessionExpiry, clearSession } = useGhostSession();
     const { address } = useAccount();
+    const [isActivating, setIsActivating] = useState(false);
+
+    const { writeContractAsync } = useWriteContract();
 
     const handleActivate = async () => {
-        try {
-            // Activate for WETH (Main trading token)
-            const result = await activateSession(TOKENS.WETH);
-            if (!result) return;
+        if (!address) return;
+        setIsActivating(true);
 
-            // Call Receptionist API
+        try {
+            // 1. Sign the Permit (Off-chain)
+            toast.loading("Signing Session Permit...", { id: "session-toast" });
+            const signedData = await signSession(TOKENS.WETH);
+
+            if (!signedData) {
+                toast.dismiss("session-toast");
+                setIsActivating(false);
+                return;
+            }
+
+            // 2. Submit Transaction (On-chain)
+            // We must call activateSession so the Hook calls PERMIT2.permit() and sets storage.
+            // CAUTION: msg.sender must be the signer (User).
+            toast.loading("Activating On-Chain Session...", { id: "session-toast" });
+
+            const hash = await writeContractAsync({
+                address: CONTRACTS.unichainSepolia.eidolonHook,
+                abi: HOOK_ABI,
+                functionName: 'activateSession',
+                args: [
+                    // PermitSingle struct
+                    {
+                        details: {
+                            token: signedData.permit.details.token,
+                            amount: signedData.permit.details.amount,
+                            expiration: signedData.permit.details.expiration,
+                            nonce: signedData.permit.details.nonce,
+                        },
+                        spender: signedData.permit.spender,
+                        sigDeadline: signedData.permit.sigDeadline,
+                    },
+                    // Signature
+                    signedData.signature
+                ]
+            });
+
+            toast.loading("Waiting for Confirmation...", { id: "session-toast" });
+
+            // 3. Notify Backend (Fire & Forget, but ensures Redis is synced)
+            // The backend mostly uses this for "sensing" intention, though it can also read on-chain events.
             await fetch('/api/receptionist/session/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(result)
+                body: JSON.stringify(signedData)
             });
 
-            toast.success("Session Activated", {
-                description: `Ghost Liquidity enabled for 24 hours.`
+            toast.success("Session Activated Successfully!", {
+                id: "session-toast",
+                description: `Ghost Liquidity enabled for 24 hours. Tx: ${hash.slice(0, 6)}...`
             });
 
         } catch (e: any) {
-            toast.error("Session Activation Failed", { description: e.message });
+            console.error(e);
+            toast.error("Activation Failed", {
+                id: "session-toast",
+                description: e.message || "Failed to activate session."
+            });
+        } finally {
+            setIsActivating(false);
         }
     };
+
+    const isPending = isSigning || isActivating;
 
     const timeLeft = sessionExpiry ? Math.max(0, sessionExpiry - Math.floor(Date.now() / 1000)) : 0;
     const hours = Math.floor(timeLeft / 3600);
@@ -73,7 +133,7 @@ export function GhostSessionControl() {
                             }
                         >
                             {isPending && <Loader2 className="w-3 h-3 animate-spin" />}
-                            {isPending ? "SIGNING..." : "START 24H SESSION"}
+                            {isPending ? "ACTIVATING..." : "START 24H SESSION"}
                         </button>
                     </div>
                 )}

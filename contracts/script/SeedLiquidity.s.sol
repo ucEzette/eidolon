@@ -29,7 +29,7 @@ contract SeedLiquidity is Script, IUnlockCallback {
     // Contract Addresses
     IPoolManager constant POOL_MANAGER =
         IPoolManager(0x00B036B58a818B1BC34d502D3fE730Db729e62AC);
-    address constant HOOK = 0xf6fc9c0a7f003e25A66505e5E4Cb23014FD660C8;
+    address constant HOOK = 0x296bA69b1F79d0eb0Ca812C5cf58FC2f4C0Bb0C8;
 
     // Token Addresses
     address constant USDC = 0x31d0220469e10c4E71834a79b1f276d740d3768F;
