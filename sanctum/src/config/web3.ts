@@ -62,11 +62,12 @@ export const chains = [unichainSepolia, mainnet] as const;
 export const CONTRACTS = {
     // Unichain Sepolia testnet - DEPLOYED & VERIFIED
     unichainSepolia: {
-        eidolonHook: (process.env.NEXT_PUBLIC_EIDOLON_HOOK || "0x28acad3FFb04D622DdC43EdbCa03A549BDEcA0C8") as `0x${string}`,
-        executor: (process.env.NEXT_PUBLIC_EIDOLON_EXECUTOR || "0x3f03964E372B74C72861e73e34Ede1dB55CD6E1c") as `0x${string}`,
+        eidolonHook: (process.env.NEXT_PUBLIC_EIDOLON_HOOK || "0x296bA69b1F79d0eb0Ca812C5cf58FC2f4C0Bb0C8") as `0x${string}`,
+        executor: (process.env.NEXT_PUBLIC_EIDOLON_EXECUTOR || "0x8bDa7dFCDd83574eC253563056F93ce4cb070D71") as `0x${string}`,
         poolManager: (process.env.NEXT_PUBLIC_POOL_MANAGER || "0x00B036B58a818B1BC34d502D3fE730Db729e62AC") as `0x${string}`,
         permit2: (process.env.NEXT_PUBLIC_PERMIT2 || "0x000000000022D473030F116dDEE9F6B43aC78BA3") as `0x${string}`,
-        quoter: (process.env.NEXT_PUBLIC_QUOTER || "0x56dcd40a3f2d466f48e7f48bdbe5cc9b92ae4472") as `0x${string}`,
+        quoter: (process.env.NEXT_PUBLIC_QUOTER || "0x26b8fbf92e1063caeffba70ec8f86fc3d76e7911") as `0x${string}`,
+        liquidityProvider: (process.env.NEXT_PUBLIC_LIQUIDITY_PROVIDER || "0x4671fF849B7eAec3032bf1401D1C732634a1309d") as `0x${string}`,
     }
 } as const;
 

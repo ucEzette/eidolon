@@ -39,6 +39,9 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
 
         const { token0, token1, fee, tickSpacing, hooks, zeroForOne, amountIn, decimalsIn, decimalsOut } = params;
 
+        // Log params for debugging
+        console.log("Fetching Quote Params:", params);
+
         // Sort tokens for PoolKey (Uniswap V4 requires sorted order)
         const [currency0, currency1] = token0.toLowerCase() < token1.toLowerCase()
             ? [token0, token1]
@@ -73,6 +76,8 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
                 hookData: '0x' as `0x${string}`,
             };
 
+            console.log("Simulating Contract with:", quoteParams);
+
             // Use eth_call to simulate the quote (quoter is view-like via static call)
             const result = await publicClient.simulateContract({
                 address: CONTRACTS.unichainSepolia.quoter,
@@ -80,6 +85,8 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
                 functionName: 'quoteExactInputSingle',
                 args: [quoteParams],
             });
+
+            console.log("Quote Result:", result);
 
             // deltaAmounts[0] is currency0 delta, deltaAmounts[1] is currency1 delta
             // The output is the positive delta (what you receive)
@@ -97,8 +104,13 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
 
             const formatted = formatUnits(outputAmount, outputDecimals);
             setAmountOut(Number(formatted).toLocaleString('en-US', { maximumFractionDigits: 6 }));
+
         } catch (e: any) {
             console.error('Quote error:', e);
+            // Extract detailed revert reason if possible
+            const revertReason = e.walk ? e.walk((err: any) => err.data)?.data : null;
+            if (revertReason) console.error("Revert Reason Data:", revertReason);
+
             setError(e.message || 'Failed to fetch quote');
             setAmountOut(null);
         } finally {
