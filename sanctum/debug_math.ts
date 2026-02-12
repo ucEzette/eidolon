@@ -1,0 +1,93 @@
+
+const Q96 = 2n ** 96n;
+
+function getSqrtRatioAtTick(tick: number): bigint {
+    const absTick = tick < 0 ? -tick : tick;
+    let ratio = (absTick & 0x1) != 0 ? 0xfffcb933bd6fad37aa2d162d1a594001n : 0x100000000000000000000000000000000n;
+    if ((absTick & 0x2) != 0) ratio = (ratio * 0xfff97272373d413259a46990580e213an) >> 128n;
+    if ((absTick & 0x4) != 0) ratio = (ratio * 0xfff2e50f5f656932ef12357cf3c7fdccn) >> 128n;
+    if ((absTick & 0x8) != 0) ratio = (ratio * 0xffe5caca7e10e4e61c3624eaa0941cd0n) >> 128n;
+    if ((absTick & 0x10) != 0) ratio = (ratio * 0xffcb9843d60f6159c9db58835c926644n) >> 128n;
+    if ((absTick & 0x20) != 0) ratio = (ratio * 0xff973b41fa98c081472e6896dfb254c0n) >> 128n;
+    if ((absTick & 0x40) != 0) ratio = (ratio * 0xff2ea16466c96c3843ec3a8815466660n) >> 128n;
+    if ((absTick & 0x80) != 0) ratio = (ratio * 0xfe5dee046a99a2a811c461f1969c3053n) >> 128n;
+    if ((absTick & 0x100) != 0) ratio = (ratio * 0xfcbe86ad80ceaaef5e0050a647303374n) >> 128n;
+    if ((absTick & 0x200) != 0) ratio = (ratio * 0xf987a7253ac413176f2b074cf7815e54n) >> 128n;
+    if ((absTick & 0x400) != 0) ratio = (ratio * 0xf3392b0822b70005940c7a398e4b70f3n) >> 128n;
+    if ((absTick & 0x800) != 0) ratio = (ratio * 0xe7159475a2c29b7443b29c7fa6e889d9n) >> 128n;
+    if ((absTick & 0x1000) != 0) ratio = (ratio * 0xd097f3bdfd2022b8845ad8f792aa5825n) >> 128n;
+    if ((absTick & 0x2000) != 0) ratio = (ratio * 0xa9f746462d870fdf8a65dc1f90e061e5n) >> 128n;
+    if ((absTick & 0x4000) != 0) ratio = (ratio * 0x70d869a156d2a1b890bb3df62baf32f7n) >> 128n;
+    if ((absTick & 0x8000) != 0) ratio = (ratio * 0x31be135f97d08fd981231505542fcfa6n) >> 128n;
+    if ((absTick & 0x10000) != 0) ratio = (ratio * 0x9aa508b5b7a84e1c677de54f3e99bc9n) >> 128n;
+    if ((absTick & 0x20000) != 0) ratio = (ratio * 0x5d6af8dedb81196699c329225ee604n) >> 128n;
+    if ((absTick & 0x40000) != 0) ratio = (ratio * 0x2216e584f5fa1ea926041bedfe98n) >> 128n;
+    if ((absTick & 0x80000) != 0) ratio = (ratio * 0x48a170391f7dc42444e8fa2n) >> 128n;
+
+    if (tick > 0) ratio = (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn / ratio);
+
+    // safe up to maxTick ~887k
+    return (ratio * Q96) >> 128n;
+}
+
+function getAmountsForLiquidity(
+    liquidity: bigint,
+    sqrtPriceX96: bigint,
+    tickLower: number,
+    tickUpper: number
+): { amount0: bigint, amount1: bigint } {
+
+    const sqrtRatioA = getSqrtRatioAtTick(tickLower);
+    const sqrtRatioB = getSqrtRatioAtTick(tickUpper);
+
+    let sqrtRatioL = sqrtRatioA;
+    let sqrtRatioR = sqrtRatioB;
+    if (sqrtRatioA > sqrtRatioB) {
+        sqrtRatioL = sqrtRatioB;
+        sqrtRatioR = sqrtRatioA;
+    }
+
+    // console.log("sqrtL:", sqrtRatioL.toString());
+    // console.log("sqrtR:", sqrtRatioR.toString());
+
+    let amount0 = 0n;
+    let amount1 = 0n;
+
+    if (sqrtPriceX96 <= sqrtRatioL) {
+        const num = liquidity * (sqrtRatioR - sqrtRatioL);
+        const den = (sqrtRatioL * sqrtRatioR) / Q96;
+        amount0 = num / den;
+    } else if (sqrtPriceX96 < sqrtRatioR) {
+        const num0 = liquidity * (sqrtRatioR - sqrtPriceX96);
+        const den0 = (sqrtPriceX96 * sqrtRatioR) / Q96;
+        amount0 = num0 / den0;
+
+        amount1 = (liquidity * (sqrtPriceX96 - sqrtRatioL)) / Q96;
+    } else {
+        amount1 = (liquidity * (sqrtRatioR - sqrtRatioL)) / Q96;
+    }
+
+    return { amount0, amount1 };
+}
+
+const MAX_TICK = 887272;
+const SPACING = 60;
+const alignedMax = Math.floor(MAX_TICK / SPACING) * SPACING;
+const alignedMin = -alignedMax;
+
+const liquidity = 182574185n;
+const sqrtPriceX96_One = Q96; // Price = 1.0
+
+console.log("--- DEBUG MATH ---");
+console.log(`Ticks: ${alignedMin} -> ${alignedMax}`);
+console.log(`Liquidity: ${liquidity}`);
+
+const result = getAmountsForLiquidity(liquidity, sqrtPriceX96_One, alignedMin, alignedMax);
+console.log("Amounts (Price 1.0):", result);
+
+const priceRatio = 3000 * Math.pow(10, -12);
+const sqrtP = BigInt(Math.floor(Math.sqrt(priceRatio) * Number(Q96)));
+console.log(`SqrtPriceX96 (3000 USDC/ETH): ${sqrtP}`);
+
+const result2 = getAmountsForLiquidity(liquidity, sqrtP, alignedMin, alignedMax);
+console.log("Amounts (Price 3000):", result2);
