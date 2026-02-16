@@ -188,8 +188,8 @@ export class Executor {
 
                 console.log(`\n--- DEBUG VERIFICATION [${intent.id.slice(0, 8)}] ---`);
                 console.log(`Signer: ${intent.provider}`);
-                console.log(`Nonce: ${intent.permit.details.nonce}`);
-                console.log(`Expiry: ${intent.permit.details.expiration}`);
+                console.log(`Nonce: ${intent.permit.nonce}`);
+                console.log(`Deadline: ${intent.permit.deadline}`);
 
                 try {
                     const isValid = await this.client.verifyTypedData({
@@ -200,19 +200,23 @@ export class Executor {
                             verifyingContract: CONFIG.CONTRACTS.PERMIT2,
                         },
                         types: {
-                            PermitSingle: [
-                                { name: "details", type: "PermitDetails" },
+                            PermitWitnessTransferFrom: [
+                                { name: "permitted", type: "TokenPermissions" },
                                 { name: "spender", type: "address" },
-                                { name: "sigDeadline", type: "uint256" }
+                                { name: "nonce", type: "uint256" },
+                                { name: "deadline", type: "uint256" },
+                                { name: "witness", type: "WitnessData" },
                             ],
-                            PermitDetails: [
+                            TokenPermissions: [
                                 { name: "token", type: "address" },
-                                { name: "amount", type: "uint160" },
-                                { name: "expiration", type: "uint48" },
-                                { name: "nonce", type: "uint48" }
-                            ]
+                                { name: "amount", type: "uint256" },
+                            ],
+                            WitnessData: [
+                                { name: "poolId", type: "bytes32" },
+                                { name: "hook", type: "address" },
+                            ],
                         },
-                        primaryType: 'PermitSingle',
+                        primaryType: 'PermitWitnessTransferFrom',
                         message: intent.permit,
                         signature: intent.signature as Hex
                     });

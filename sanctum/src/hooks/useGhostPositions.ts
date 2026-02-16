@@ -21,6 +21,7 @@ export interface GhostPosition {
     tickSpacing: number;
     hookAddress: string;
     txHash?: string;
+    permit?: any; // Permit2 data for gasless execution by the bot
 }
 
 export function useGhostPositions() {

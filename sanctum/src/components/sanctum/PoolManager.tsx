@@ -546,116 +546,38 @@ export function PoolManager() {
         }
     };
 
-    const handleSwap = async () => {
-        if (!isConnected || !address) {
-            toast.error("Wallet not connected");
-            return;
-        }
-
-        if (isWrongNetwork) {
-            handleSwitchNetwork();
-            return;
-        }
-
-        setIsSwapPending(true);
-
-        try {
-            const t0 = getTokenByAddress(poolConfig.token0);
-            const t1 = getTokenByAddress(poolConfig.token1);
-            const sym0 = t0?.symbol || truncateAddress(poolConfig.token0);
-            const sym1 = t1?.symbol || truncateAddress(poolConfig.token1);
-
-            const inputToken = zeroForOne ? poolConfig.token0 : poolConfig.token1;
-            const inputSymbol = zeroForOne ? sym0 : sym1;
-            const decimals = zeroForOne ? decimals0 : decimals1;
-
-            const ETH_ADDR = TOKEN_MAP["ETH"]?.address || ZERO_ADDRESS;
-            const WETH_ADDR = TOKEN_MAP["WETH"]?.address;
-
-            let t0_calc = poolConfig.token0;
-            let t1_calc = poolConfig.token1;
-
-            if (t0_calc === ETH_ADDR) t0_calc = WETH_ADDR;
-            if (t1_calc === ETH_ADDR) t1_calc = WETH_ADDR;
-
-            const [swapC0, swapC1] = t0_calc.toLowerCase() < t1_calc.toLowerCase()
-                ? [t0_calc, t1_calc]
-                : [t1_calc, t0_calc];
-
-            const poolId = getPoolId(
-                swapC0 as `0x${string}`,
-                swapC1 as `0x${string}`,
-                poolConfig.fee,
-                poolConfig.tickSpacing,
-                poolConfig.hooks as `0x${string}`
-            );
-
-            const key = {
-                currency0: swapC0 as `0x${string}`,
-                currency1: swapC1 as `0x${string}`,
-                fee: poolConfig.fee,
-                tickSpacing: poolConfig.tickSpacing,
-                hooks: poolConfig.hooks as `0x${string}`
-            };
-
-            let permitToken = inputToken;
-
-            if (inputToken === ETH_ADDR) {
-                permitToken = WETH_ADDR;
-            }
-
-            // --- SESSION-BASED INTENT MODE ---
-
-            if (!sessionActive) {
-                toast.error("Ghost Session Required", {
-                    description: "Please start a Ghost Session to trade gaslessly.",
-                });
-                return;
-            }
-
-            const permitTokenAddr = (permitToken as string) === ETH_ADDR ? WETH_ADDR : permitToken;
-
-            // Calculate expiry (30 mins validity for the intent)
-            const intentExpiry = Date.now() + 30 * 60 * 1000;
-
-            // Add Position (Intent) via Hook (Relayer)
-            const { addPosition } = useGhostPositions(); // Importing here or lifting up? Lifting up is better.
-
-            // Wait, I need to access addPosition from hook.
-            // I'll assume useGhostPositions is available in scope or needs to be called.
-            // Actually it is called at top level: const { positions: ghostPositions } = useGhostPositions();
-            // I need to destructure addPosition there too.
-
-        } catch (e: any) {
-            console.error(e);
-        } finally {
-            setIsSwapPending(false);
-        }
-    };
 
     // Hooks for Intent-Based Swapping
     const { signPermit } = useGhostPermit();
     const { addPosition } = useGhostPositions();
     const { isSessionActive: sessionActive } = useGhostSession();
 
+
     // Re-bind handleSwap implementation properly to use these hooks
     // (Previous handleSwap block was truncated/pseudocode, fixing now)
-    const handleSwapReal = async () => {
+    // ═══════════════════════════════════════════════════════════════
+    // GASLESS INTENT SWAP — signs Permit2 and submits to relayer/bot
+    // ═══════════════════════════════════════════════════════════════
+    const handleSwapGasless = async () => {
         if (!isConnected || !address) {
             toast.error("Wallet not connected");
             return;
         }
+        if (!sessionActive) {
+            toast.error("Ghost Session Required", {
+                description: "Start a Ghost Session to trade gaslessly.",
+            });
+            return;
+        }
         setIsSwapPending(true);
+        const id = toast.loading("Signing swap intent...");
         try {
-            const t0 = getTokenByAddress(poolConfig.token0);
-            const t1 = getTokenByAddress(poolConfig.token1);
             const inputToken = zeroForOne ? poolConfig.token0 : poolConfig.token1;
             const decimals = zeroForOne ? decimals0 : decimals1;
 
             const ETH_ADDR = TOKEN_MAP["ETH"]?.address || ZERO_ADDRESS;
             const WETH_ADDR = TOKEN_MAP["WETH"]?.address;
 
-            // Normalize for Pool Key
             let c0 = poolConfig.token0 === ETH_ADDR ? WETH_ADDR : poolConfig.token0;
             let c1 = poolConfig.token1 === ETH_ADDR ? WETH_ADDR : poolConfig.token1;
             const [sorted0, sorted1] = c0.toLowerCase() < c1.toLowerCase() ? [c0, c1] : [c1, c0];
@@ -668,37 +590,142 @@ export function PoolManager() {
                 poolConfig.hooks as `0x${string}`
             );
 
-            if (!sessionActive) {
-                toast.error("Ghost Session Required");
+            const permitTokenAddr = (inputToken === ETH_ADDR ? WETH_ADDR : inputToken) as `0x${string}`;
+
+            // Sign Permit2 Witness Transfer for the input token
+            const permitResult = await signPermit(
+                permitTokenAddr,
+                swapAmount,
+                poolId,
+                false, // not dual-sided
+                30,    // 30 min validity
+                decimals
+            );
+
+            if (!permitResult) {
+                toast.error("Permit signing cancelled", { id });
                 return;
             }
 
-            // Create Intent
+            toast.loading("Submitting intent...", { id });
+
+            // Build the permit object — must exactly match the signed EIP-712 message
+            // (PermitWitnessTransferFrom with WitnessData)
+            const permit = {
+                permitted: {
+                    token: permitTokenAddr,
+                    amount: permitResult.amount.toString(),
+                },
+                spender: permitResult.hook,
+                nonce: permitResult.nonce.toString(),
+                deadline: permitResult.deadline.toString(),
+                witness: {
+                    poolId: poolId,
+                    hook: permitResult.hook,
+                },
+            };
+
             addPosition({
-                tokenA: inputToken === ETH_ADDR ? WETH_ADDR : inputToken,
-                tokenB: zeroForOne ? (poolConfig.token1 === ETH_ADDR ? WETH_ADDR : poolConfig.token1) : (poolConfig.token0 === ETH_ADDR ? WETH_ADDR : poolConfig.token0),
+                tokenA: permitTokenAddr,
+                tokenB: zeroForOne
+                    ? (poolConfig.token1 === ETH_ADDR ? WETH_ADDR : poolConfig.token1)
+                    : (poolConfig.token0 === ETH_ADDR ? WETH_ADDR : poolConfig.token0),
                 amountA: swapAmount,
                 amountB: "0",
                 expiry: Date.now() + 30 * 60 * 1000,
-                signature: "0x", // Session Auth
+                signature: permitResult.signature,
                 liquidityMode: 'one-sided',
                 type: 'swap',
-                nonce: crypto.randomUUID(),
+                nonce: permitResult.nonce.toString(),
                 provider: address,
                 poolId: poolId,
                 fee: poolConfig.fee,
                 tickSpacing: poolConfig.tickSpacing,
-                hookAddress: poolConfig.hooks
+                hookAddress: poolConfig.hooks,
+                permit: permit,
             });
 
-            toast.success("Swap Intent Submitted");
+            toast.success("Gasless Swap Intent Submitted! ⚡", { id });
             setSwapAmount("");
 
         } catch (e: any) {
             console.error(e);
-            toast.error("Swap Failed");
+            toast.error(e.message || "Gasless Swap Failed", { id });
         } finally {
             setIsSwapPending(false);
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // DIRECT SWAP — user pays gas, on-chain via EidolonExecutor
+    // ═══════════════════════════════════════════════════════════════
+    const handleDirectSwap = async () => {
+        if (!isConnected || !address || !publicClient || !walletClient) {
+            toast.error("Wallet not connected");
+            return;
+        }
+        setIsSwapPending(true);
+        const id = toast.loading("Preparing direct swap...");
+        try {
+            const decimals = zeroForOne ? decimals0 : decimals1;
+            const ETH_ADDR = TOKEN_MAP["ETH"]?.address || ZERO_ADDRESS;
+            const WETH_ADDR = TOKEN_MAP["WETH"]?.address;
+
+            let c0 = poolConfig.token0 === ETH_ADDR ? WETH_ADDR : poolConfig.token0;
+            let c1 = poolConfig.token1 === ETH_ADDR ? WETH_ADDR : poolConfig.token1;
+            const [sorted0, sorted1] = c0.toLowerCase() < c1.toLowerCase() ? [c0, c1] : [c1, c0];
+
+            const poolKey = {
+                currency0: sorted0 as `0x${string}`,
+                currency1: sorted1 as `0x${string}`,
+                fee: poolConfig.fee,
+                tickSpacing: poolConfig.tickSpacing,
+                hooks: poolConfig.hooks as `0x${string}`,
+            };
+
+            const absAmount = parseUnits(swapAmount, decimals);
+            const amountSpecified = -absAmount; // negative = exact input
+
+            // Dynamic price limit based on direction
+            const MIN_SQRT_PRICE = 4295128739n;
+            const MAX_SQRT_PRICE = 1461446703485210103287273052203988822378723970342n;
+            const sqrtPriceLimitX96 = zeroForOne ? MIN_SQRT_PRICE + 1n : MAX_SQRT_PRICE - 1n;
+
+            toast.loading("Confirm in wallet...", { id });
+
+            const { request } = await publicClient.simulateContract({
+                address: CONTRACTS.unichainSepolia.executor as `0x${string}`,
+                abi: EXECUTOR_ABI,
+                functionName: 'execute',
+                args: [
+                    poolKey,
+                    { zeroForOne, amountSpecified: BigInt(amountSpecified), sqrtPriceLimitX96 },
+                    '0x' as `0x${string}`,
+                    address as `0x${string}`,
+                ],
+                account: address as `0x${string}`,
+            });
+
+            const hash = await walletClient.writeContract(request);
+            toast.loading("Waiting for confirmation...", { id });
+            await publicClient.waitForTransactionReceipt({ hash });
+            toast.success("Swap Successful! 🎉", { id });
+            setSwapAmount("");
+
+        } catch (e: any) {
+            console.error("Direct swap error:", e);
+            const msg = e?.shortMessage || e?.message || "Direct Swap Failed";
+            toast.error(msg, { id });
+        } finally {
+            setIsSwapPending(false);
+        }
+    };
+
+    const handleSwapReal = () => {
+        if (isDirectSwap) {
+            handleDirectSwap();
+        } else {
+            handleSwapGasless();
         }
     };
 
@@ -1132,8 +1159,44 @@ export function PoolManager() {
                                     </div>
                                 </div>
 
-                                <button onClick={handleSwapReal} className="w-full py-4 bg-primary hover:bg-cyan-300 text-black font-bold font-display tracking-widest rounded-xl mt-4 transition-all shadow-lg shadow-primary/20">
-                                    {isSwapPending ? "SWAPPING..." : "SWAP NOW"}
+                                {/* Swap Mode Toggle */}
+                                <div className="flex items-center bg-black/30 rounded-xl border border-white/10 p-1 mt-4">
+                                    <button
+                                        onClick={() => setIsDirectSwap(false)}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${!isDirectSwap
+                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg shadow-emerald-500/10'
+                                                : 'text-text-muted hover:text-white/70'
+                                            }`}
+                                    >
+                                        <span className="material-symbols-outlined text-base">bolt</span>
+                                        Gasless
+                                    </button>
+                                    <button
+                                        onClick={() => setIsDirectSwap(true)}
+                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${isDirectSwap
+                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 shadow-lg shadow-cyan-500/10'
+                                                : 'text-text-muted hover:text-white/70'
+                                            }`}
+                                    >
+                                        <span className="material-symbols-outlined text-base">account_balance_wallet</span>
+                                        Direct
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-text-muted text-center mt-1">
+                                    {isDirectSwap
+                                        ? 'You pay gas. Swap executes immediately on-chain.'
+                                        : 'Sign an intent. MEV bot executes your swap gaslessly.'
+                                    }
+                                </p>
+
+                                <button onClick={handleSwapReal} className={`w-full py-4 font-bold font-display tracking-widest rounded-xl mt-3 transition-all shadow-lg ${isDirectSwap
+                                        ? 'bg-cyan-400 hover:bg-cyan-300 text-black shadow-cyan-400/20'
+                                        : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/20'
+                                    }`}>
+                                    {isSwapPending
+                                        ? "SWAPPING..."
+                                        : isDirectSwap ? "SWAP NOW" : "⚡ SIGN & SWAP"
+                                    }
                                 </button>
                             </div>
                         </div>
