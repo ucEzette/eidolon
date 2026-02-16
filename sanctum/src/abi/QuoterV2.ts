@@ -1,5 +1,6 @@
-// Uniswap V4 QuoterV2 ABI (minimal interface for quoting)
-// Reference: https://docs.uniswap.org/contracts/v4/reference/periphery/lens/Quoter
+// Uniswap V4 V4Quoter ABI — matches deployed V4Quoter (v4-periphery/src/lens/V4Quoter.sol)
+// QuoteExactSingleParams: { PoolKey poolKey, bool zeroForOne, uint128 exactAmount, bytes hookData }
+// Returns: (uint256 amountOut, uint256 gasEstimate)
 
 export const QuoterV2ABI = [
     {
@@ -21,16 +22,15 @@ export const QuoterV2ABI = [
                     },
                     { "internalType": "uint128", "name": "exactAmount", "type": "uint128" }
                 ],
-                "internalType": "struct IQuoter.QuoteExactParams",
+                "internalType": "struct IV4Quoter.QuoteExactParams",
                 "name": "params",
                 "type": "tuple"
             }
         ],
         "name": "quoteExactInput",
         "outputs": [
-            { "internalType": "int128[]", "name": "deltaAmounts", "type": "int128[]" },
-            { "internalType": "uint160[]", "name": "sqrtPriceX96AfterList", "type": "uint160[]" },
-            { "internalType": "uint32[]", "name": "initializedTicksLoadedList", "type": "uint32[]" }
+            { "internalType": "uint256", "name": "amountOut", "type": "uint256" },
+            { "internalType": "uint256", "name": "gasEstimate", "type": "uint256" }
         ],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -55,16 +55,15 @@ export const QuoterV2ABI = [
                     { "internalType": "uint128", "name": "exactAmount", "type": "uint128" },
                     { "internalType": "bytes", "name": "hookData", "type": "bytes" }
                 ],
-                "internalType": "struct IQuoter.QuoteExactSingleParams",
+                "internalType": "struct IV4Quoter.QuoteExactSingleParams",
                 "name": "params",
                 "type": "tuple"
             }
         ],
         "name": "quoteExactInputSingle",
         "outputs": [
-            { "internalType": "int128[]", "name": "deltaAmounts", "type": "int128[]" },
-            { "internalType": "uint160", "name": "sqrtPriceX96After", "type": "uint160" },
-            { "internalType": "uint32", "name": "initializedTicksLoaded", "type": "uint32" }
+            { "internalType": "uint256", "name": "amountOut", "type": "uint256" },
+            { "internalType": "uint256", "name": "gasEstimate", "type": "uint256" }
         ],
         "stateMutability": "nonpayable",
         "type": "function"
@@ -89,16 +88,15 @@ export const QuoterV2ABI = [
                     { "internalType": "uint128", "name": "exactAmount", "type": "uint128" },
                     { "internalType": "bytes", "name": "hookData", "type": "bytes" }
                 ],
-                "internalType": "struct IQuoter.QuoteExactSingleParams",
+                "internalType": "struct IV4Quoter.QuoteExactSingleParams",
                 "name": "params",
                 "type": "tuple"
             }
         ],
         "name": "quoteExactOutputSingle",
         "outputs": [
-            { "internalType": "int128[]", "name": "deltaAmounts", "type": "int128[]" },
-            { "internalType": "uint160", "name": "sqrtPriceX96After", "type": "uint160" },
-            { "internalType": "uint32", "name": "initializedTicksLoaded", "type": "uint32" }
+            { "internalType": "uint256", "name": "amountIn", "type": "uint256" },
+            { "internalType": "uint256", "name": "gasEstimate", "type": "uint256" }
         ],
         "stateMutability": "nonpayable",
         "type": "function"

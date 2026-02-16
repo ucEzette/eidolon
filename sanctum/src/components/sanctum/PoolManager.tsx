@@ -1117,7 +1117,7 @@ export function PoolManager() {
                                     <div className="flex justify-between text-xs text-text-muted uppercase tracking-wider mb-2">Receive</div>
                                     <div className="flex items-center gap-4">
                                         <div className={`w-full text-3xl font-mono font-medium ${quoterOutput ? 'text-emerald-400' : 'text-text-muted'} ${isQuoteLoading ? 'animate-pulse' : ''}`}>
-                                            {isQuoteLoading ? "..." : (quoterOutput ? Number(formatUnits(BigInt(quoterOutput), zeroForOne ? decimals1 : decimals0)).toFixed(6) : "0.00")}
+                                            {isQuoteLoading ? "..." : (quoterOutput || "0.00")}
                                         </div>
                                         <button
                                             onClick={() => setSelectorType('output')}

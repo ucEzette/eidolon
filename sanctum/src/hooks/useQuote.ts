@@ -78,7 +78,7 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
 
             console.log("Simulating Contract with:", quoteParams);
 
-            // Use eth_call to simulate the quote (quoter is view-like via static call)
+            // Use eth_call to simulate the quote (V4Quoter returns amountOut directly)
             const result = await publicClient.simulateContract({
                 address: CONTRACTS.unichainSepolia.quoter,
                 abi: QuoterV2ABI,
@@ -88,22 +88,10 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
 
             console.log("Quote Result:", result);
 
-            // deltaAmounts[0] is currency0 delta, deltaAmounts[1] is currency1 delta
-            // The output is the positive delta (what you receive)
-            const deltaAmounts = result.result[0] as bigint[];
+            // V4Quoter returns: [amountOut, gasEstimate]
+            const [amountOut_raw] = result.result as [bigint, bigint];
 
-            // Find the output amount (positive value)
-            let outputAmount: bigint;
-            if (actualZeroForOne) {
-                // Selling currency0, receiving currency1
-                outputAmount = deltaAmounts[1] > 0n ? deltaAmounts[1] : -deltaAmounts[1];
-            } else {
-                // Selling currency1, receiving currency0
-                outputAmount = deltaAmounts[0] > 0n ? deltaAmounts[0] : -deltaAmounts[0];
-            }
-
-            const formatted = formatUnits(outputAmount, outputDecimals);
-            // Use parseFloat instead of Number to avoid BigInt overflow for large values
+            const formatted = formatUnits(amountOut_raw, outputDecimals);
             const numValue = parseFloat(formatted);
             setAmountOut(isNaN(numValue) ? '0' : numValue.toLocaleString('en-US', { maximumFractionDigits: 6 }));
 
