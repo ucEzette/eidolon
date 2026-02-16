@@ -439,7 +439,8 @@ export function PoolManager() {
                 toast.loading("Initializing Pool...", { id });
                 let startPrice = Number(price);
 
-                // Invert if user entered price in opposite direction
+                // When invertPrice is true, the displayed price is token1/token0 (e.g., 0.000333 WETH per USDC)
+                // getSqrtPriceX96 expects token0/token1 (e.g., 3000 USDC per WETH), so invert back
                 if (invertPrice) {
                     startPrice = 1 / startPrice;
                 }
@@ -957,7 +958,7 @@ export function PoolManager() {
                                 </div>
                                 {!isPoolInitialized && (
                                     <div className="text-right">
-                                        <label className="text-[10px] uppercase block mb-1 text-emerald-400 font-bold">Start Price ({tRight?.symbol} per {tLeft?.symbol})</label>
+                                        <label className="text-[10px] uppercase block mb-1 text-emerald-400 font-bold">Start Price ({tLeft?.symbol} per {tRight?.symbol})</label>
                                         <input type="text" value={price} onChange={(e) => setPrice(e.target.value)} className="w-32 bg-black/40 border border-emerald-500/30 rounded p-1 font-mono text-right text-sm text-emerald-300" placeholder="0.0" />
                                     </div>
                                 )}
@@ -978,10 +979,10 @@ export function PoolManager() {
                                         }
                                     </span>
                                     <span className="text-[10px] text-text-muted whitespace-nowrap">
-                                        1 {token0?.symbol} = {isPoolInitialized
+                                        1 {token1?.symbol} = {isPoolInitialized
                                             ? (priceHistory.length > 0 ? priceHistory[priceHistory.length - 1].price.toFixed(4) : "-")
                                             : (price || "0")
-                                        } {token1?.symbol}
+                                        } {token0?.symbol}
                                     </span>
                                 </div>
                             </div>

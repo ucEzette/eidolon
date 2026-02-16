@@ -28,15 +28,52 @@ export function getPoolId(
     return keccak256(encoded);
 }
 
+// BigInt square root (Newton's method)
+function bigIntSqrt(value: bigint): bigint {
+    if (value < 0n) throw new Error("Square root of negative number");
+    if (value === 0n) return 0n;
+    let z = value;
+    let x = value / 2n + 1n;
+    while (x < z) {
+        z = x;
+        x = (value / x + x) / 2n;
+    }
+    return z;
+}
+
 export function getSqrtPriceX96(
     price: number,
     token0Decimals: number,
     token1Decimals: number
 ): bigint {
-    const ratio = price * Math.pow(10, token1Decimals - token0Decimals);
-    const sqrtRatio = Math.sqrt(ratio);
+    // price = token0 per token1 in human units (e.g., 3000 USDC per WETH)
+    // Uniswap stores token1/token0 in raw units:
+    //   ratio_raw = (1/price) * 10^(token1Decimals - token0Decimals)
+    // sqrtPriceX96 = sqrt(ratio_raw) * 2^96 = sqrt(ratio_raw * 2^192)
 
-    return BigInt(Math.floor(sqrtRatio * Number(Q96)));
+    // Scale price to BigInt with 18 decimal precision
+    const PRECISION = 18;
+    const priceBigInt = BigInt(Math.round(price * (10 ** PRECISION))); // price * 10^18
+
+    const decimalDiff = token1Decimals - token0Decimals;
+
+    // ratio_raw = (1/price) * 10^decimalDiff = 10^decimalDiff / price
+    // We compute: ratio_raw * 2^192 = (10^decimalDiff * 2^192 * 10^PRECISION) / priceBigInt
+    let numerator = (10n ** BigInt(PRECISION)) * (1n << 192n);
+
+    if (decimalDiff >= 0) {
+        numerator = numerator * (10n ** BigInt(decimalDiff));
+    } else {
+        // Negative decimalDiff: multiply denominator instead (handled below)
+    }
+
+    let denominator = priceBigInt;
+    if (decimalDiff < 0) {
+        denominator = denominator * (10n ** BigInt(-decimalDiff));
+    }
+
+    const val = numerator / denominator;
+    return bigIntSqrt(val);
 }
 
 // Helper for Pool State Slot
@@ -70,16 +107,24 @@ export function getTokenByAddress(address: string): Token | undefined {
 }
 
 export function sqrtPriceToPrice(sqrtPriceX96: bigint, decimals0: number, decimals1: number): string {
+    // Returns price as token0 per token1 (e.g., 3000 USDC per WETH)
+    // Uniswap stores: sqrtPriceX96 = sqrt(token1_raw / token0_raw) * 2^96
+    // raw_price (token1/token0) = sqrtPriceX96^2 / 2^192
+    // human_price (token1/token0) = raw_price * 10^(decimals0 - decimals1)
+    // We want token0/token1 = 1 / human_price
+
     const priceX96 = sqrtPriceX96 * sqrtPriceX96;
     const shift = 1n << 192n;
-    const decimalDiff = BigInt(decimals0 - decimals1);
 
-    let num = priceX96;
-    let den = shift;
+    // Compute token0/token1: shift / priceX96 * 10^(decimals1 - decimals0)
+    const decimalDiff = BigInt(decimals1 - decimals0);
+
+    let num = shift;
+    let den = priceX96;
 
     if (decimalDiff > 0n) {
         num = num * (10n ** decimalDiff);
-    } else {
+    } else if (decimalDiff < 0n) {
         den = den * (10n ** (-decimalDiff));
     }
 

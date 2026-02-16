@@ -103,7 +103,9 @@ export function useQuote(params: QuoteParams | null): QuoteResult {
             }
 
             const formatted = formatUnits(outputAmount, outputDecimals);
-            setAmountOut(Number(formatted).toLocaleString('en-US', { maximumFractionDigits: 6 }));
+            // Use parseFloat instead of Number to avoid BigInt overflow for large values
+            const numValue = parseFloat(formatted);
+            setAmountOut(isNaN(numValue) ? '0' : numValue.toLocaleString('en-US', { maximumFractionDigits: 6 }));
 
         } catch (e: any) {
             console.error('Quote error:', e);
