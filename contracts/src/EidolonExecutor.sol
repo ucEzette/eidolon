@@ -9,6 +9,8 @@ import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {ERC20} from "solmate/src/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/src/utils/SafeTransferLib.sol";
+import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
+import {WitnessLib} from "./libraries/WitnessLib.sol";
 
 interface IWETH {
     function deposit() external payable;
@@ -34,10 +36,12 @@ contract EidolonExecutor {
 
     IPoolManager public immutable poolManager;
     address public immutable weth;
+    ISignatureTransfer public immutable permit2;
 
-    constructor(IPoolManager _poolManager, address _weth) {
+    constructor(IPoolManager _poolManager, address _weth, address _permit2) {
         poolManager = _poolManager;
         weth = _weth;
+        permit2 = ISignatureTransfer(_permit2);
     }
 
     struct CallbackData {
@@ -47,6 +51,10 @@ contract EidolonExecutor {
         address sender;
         address recipient;
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DIRECT SWAP — msg.sender pays gas and owns the input tokens
+    // ═══════════════════════════════════════════════════════════════════════════
 
     function execute(
         PoolKey calldata key,
@@ -66,6 +74,89 @@ contract EidolonExecutor {
 
         bytes memory result = poolManager.unlock(data);
         delta = abi.decode(result, (BalanceDelta));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GASLESS SWAP — Bot calls on behalf of user, tokens pulled via Permit2
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /// @notice Execute a swap using a Permit2 witness signature to pull user tokens
+    /// @param key The pool key
+    /// @param params The swap parameters
+    /// @param hookData The hook data (GhostInstructions)
+    /// @param owner The user whose tokens are being swapped (permit signer)
+    /// @param permitAmount The amount the permit authorizes
+    /// @param permitNonce The permit nonce
+    /// @param permitDeadline The permit deadline
+    /// @param witness The witness data (poolId, hook) that was signed
+    /// @param signature The user's Permit2 signature
+    function executeGasless(
+        PoolKey calldata key,
+        SwapParams calldata params,
+        bytes calldata hookData,
+        address owner,
+        uint256 permitAmount,
+        uint256 permitNonce,
+        uint256 permitDeadline,
+        WitnessLib.WitnessData calldata witness,
+        bytes calldata signature
+    ) external returns (BalanceDelta delta) {
+        // Determine input token from swap direction
+        address inputToken = params.zeroForOne
+            ? Currency.unwrap(key.currency0)
+            : Currency.unwrap(key.currency1);
+
+        // Calculate actual input amount (amountSpecified is negative for exact-input)
+        uint256 inputAmount = uint256(-params.amountSpecified);
+
+        // 1. Pull user's tokens into THIS contract via Permit2 witness transfer
+        ISignatureTransfer.PermitTransferFrom
+            memory permitTransfer = ISignatureTransfer.PermitTransferFrom({
+                permitted: ISignatureTransfer.TokenPermissions({
+                    token: inputToken,
+                    amount: permitAmount
+                }),
+                nonce: permitNonce,
+                deadline: permitDeadline
+            });
+
+        ISignatureTransfer.SignatureTransferDetails
+            memory transferDetails = ISignatureTransfer
+                .SignatureTransferDetails({
+                    to: address(this),
+                    requestedAmount: inputAmount
+                });
+
+        bytes32 witnessHash = WitnessLib.hash(witness);
+
+        permit2.permitWitnessTransferFrom(
+            permitTransfer,
+            transferDetails,
+            owner,
+            witnessHash,
+            WitnessLib.WITNESS_TYPE_STRING,
+            signature
+        );
+
+        // 2. Execute the swap — sender is address(this) so _settle uses our balance
+        bytes memory data = abi.encode(
+            CallbackData({
+                key: key,
+                params: params,
+                hookData: hookData,
+                sender: address(this),
+                recipient: owner
+            })
+        );
+
+        bytes memory result = poolManager.unlock(data);
+        delta = abi.decode(result, (BalanceDelta));
+
+        // 3. Return any leftover input tokens to the user
+        uint256 remaining = ERC20(inputToken).balanceOf(address(this));
+        if (remaining > 0) {
+            ERC20(inputToken).safeTransfer(owner, remaining);
+        }
     }
 
     function unlockCallback(
@@ -123,7 +214,7 @@ contract EidolonExecutor {
         if (currency.isAddressZero()) {
             poolManager.settle{value: amount}();
         } else {
-            // Priority 1: Use funds already in the contract (e.g. from Auto-Wrap or provided by Hook)
+            // Priority 1: Use funds already in the contract (e.g. from Permit2 pull or Auto-Wrap)
             uint256 balance = ERC20(Currency.unwrap(currency)).balanceOf(
                 address(this)
             );

@@ -54,7 +54,8 @@ eidolon/
 ├── contracts/          # Solidity (Foundry) - Hook, Executor, and JIT Libraries
 ├── sanctum/            # Next.js (TypeScript) - Frontend & Intent Relayer
 ├── medium/             # Node.js (TypeScript) - Autonomous Execution Bot
-└── .env files          # Centralized configuration for all services
+├── start_services.sh   # Helper to start Redis + Bot
+└── .env files          # Per-module configuration
 ```
 
 ---
@@ -72,23 +73,39 @@ EIDOLON uses a centralized environment model. Ensure you populate the `.env` fil
 ```bash
 cd contracts
 forge build
-# Deploy to Unichain Sepolia
-forge script script/DeployAll.s.sol --rpc-url $RPC_URL --broadcast
+
+# Deploy EidolonHook (uses HookMiner for address mining)
+forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast
+
+# Deploy EidolonExecutor
+forge script script/DeployExecutor.s.sol --rpc-url $RPC_URL --broadcast
 ```
 
 ### 3. Start the Medium (Bot)
 ```bash
 cd medium
 npm install
-npm run dev # Starts sensing the ethereal plane
+npm run build   # Compile TypeScript
+npm run start   # Starts sensing the ethereal plane
 ```
 
 ### 4. Launch the Sanctum (Frontend)
 ```bash
 cd sanctum
 npm install
-npm run dev # Accessible at http://localhost:3000
+npm run dev     # Accessible at http://localhost:3000
 ```
+
+---
+
+## 📜 Deployed Contracts (Unichain Sepolia)
+
+| Contract | Address |
+|----------|:--------|
+| **EidolonHook** | [`0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8`](https://sepolia.unichainexplorer.com/address/0x2eb9Bc212868Ca74c0f9191B3a27990e0dfa80C8) |
+| **EidolonExecutor** | [`0xa71d8e820e579412e80e62fd1b3619b179e61623`](https://sepolia.unichainexplorer.com/address/0xa71d8e820e579412e80e62fd1b3619b179e61623) |
+| **PoolManager** | [`0x00B036B58a818B1BC34d502D3fE730Db729e62AC`](https://sepolia.unichainexplorer.com/address/0x00B036B58a818B1BC34d502D3fE730Db729e62AC) |
+| **Permit2** | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 
 ---
 
